@@ -94,8 +94,8 @@ verdescan-mobile/
 ### Passos
 
 ```bash
-git clone https://github.com/Murilo1704/verdescan-mobile.git
-cd verdescan-mobile
+git clone https://github.com/Murilo1704/SPRINT-3-CROSS-PLATAFORM.git
+cd SPRINT-3-CROSS-PLATAFORM
 npm install
 npx expo start
 ```

@@ -24,6 +24,11 @@ expo-env.d.ts
 # Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Modelos de IA (baixados do GitHub Releases por VERDESCAN-API/baixar_modelos.py)
+VERDESCAN-API/modelos/*.keras
 
 # debug
 npm-debug.*
@@ -35,6 +40,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript

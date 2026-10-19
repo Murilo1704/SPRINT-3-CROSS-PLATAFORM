@@ -1,0 +1,8 @@
+# API do VerdeScan: Keras 3 com backend JAX (mais leve que o TensorFlow)
+fastapi
+uvicorn
+python-multipart
+pillow
+numpy
+keras==3.13.2
+jax[cpu]

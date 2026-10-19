@@ -48,8 +48,9 @@ from fastapi.middleware.cors import (
 from pydantic import BaseModel
 
 
-import tensorflow as tf
 import numpy as np
+
+from modelos_ia import carregar_modelo, sigmoid
 
 
 from PIL import (
@@ -356,9 +357,8 @@ print(
 
 
 modelo_segmentacao = (
-    tf.keras.models.load_model(
-        CAMINHO_SEGMENTACAO,
-        compile=False
+    carregar_modelo(
+        CAMINHO_SEGMENTACAO
     )
 )
 
@@ -391,9 +391,8 @@ print(
 
 
 modelo_classificacao = (
-    tf.keras.models.load_model(
-        CAMINHO_CLASSIFICACAO,
-        compile=False
+    carregar_modelo(
+        CAMINHO_CLASSIFICACAO
     )
 )
 
@@ -600,6 +599,8 @@ def status_modelos():
                     CAMINHO_SEGMENTACAO
                 ),
 
+            "backend":
+                modelo_segmentacao.backend,
             "input":
                 modelo_segmentacao.input_shape,
 
@@ -831,7 +832,7 @@ def executar_segmentacao(
     )
 
 
-    mascara = tf.argmax(
+    mascara = np.argmax(
 
         logits,
 
@@ -841,7 +842,6 @@ def executar_segmentacao(
 
     mascara = (
         mascara
-        .numpy()
         .astype(
             np.uint8
         )
@@ -1168,10 +1168,9 @@ def executar_classificacao_ordinal(
 
 
     probabilidades_ordinais = (
-        tf.nn.sigmoid(
+        sigmoid(
             logits
         )[0]
-        .numpy()
     )
 
 

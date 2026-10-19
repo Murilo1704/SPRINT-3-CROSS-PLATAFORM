@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import {
   router,
   useFocusEffect,
@@ -13,18 +15,31 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import OcorrenciaCard from "../components/OcorrenciaCard";
+import Cabecalho from "../components/ui/Cabecalho";
+import Card from "../components/ui/Card";
+import Carregando from "../components/ui/Carregando";
+import EstadoVazio from "../components/ui/EstadoVazio";
 
 import { carregarOcorrencias } from "../services/storage";
+
+import {
+  cores,
+  espaco,
+  tipografia,
+} from "../theme";
+
 import { Ocorrencia } from "../types/Ocorrencia";
-import OcorrenciaCard from "../components/OcorrenciaCard";
+
 
 type ResumoRodovia = {
   rodovia: string;
+  ocorrencias: Ocorrencia[];
   total: number;
   criticos: number;
   atencao: number;
@@ -34,939 +49,444 @@ type ResumoRodovia = {
   kmFinal: number;
 };
 
+
 export default function RodoviasScreen() {
-  const [
-    ocorrencias,
-    setOcorrencias,
-  ] = useState<Ocorrencia[]>([]);
+  const insets = useSafeAreaInsets();
+
+  const [ocorrencias, setOcorrencias] =
+    useState<Ocorrencia[]>([]);
+
+  const [carregando, setCarregando] =
+    useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      async function carregar() {
-        const dados =
-          await carregarOcorrencias();
-
-        setOcorrencias(dados);
-      }
-
-      carregar();
+      carregarOcorrencias()
+        .then(setOcorrencias)
+        .finally(() => setCarregando(false));
     }, [])
   );
 
+
+  // =========================================================
+  // AGRUPAR POR RODOVIA (mais críticos primeiro)
+  // =========================================================
+
   const rodovias = useMemo(() => {
-    const mapa = new Map<
-      string,
-      Ocorrencia[]
-    >();
+    const mapa = new Map<string, Ocorrencia[]>();
 
-    ocorrencias.forEach(
-      (ocorrencia) => {
-        const nome =
-          ocorrencia.rodovia
-            ?.trim()
-            .toUpperCase() ||
-          "RODOVIA NÃO INFORMADA";
+    ocorrencias.forEach((ocorrencia) => {
+      const nome =
+        ocorrencia.rodovia?.trim().toUpperCase() ||
+        "RODOVIA NÃO INFORMADA";
 
-        const lista =
-          mapa.get(nome) || [];
-
-        lista.push(ocorrencia);
-
-        mapa.set(
-          nome,
-          lista
-        );
-      }
-    );
+      mapa.set(nome, [...(mapa.get(nome) ?? []), ocorrencia]);
+    });
 
     const resultado: ResumoRodovia[] =
-      Array.from(
-        mapa.entries()
-      ).map(
-        ([rodovia, lista]) => {
-          const kms = lista.map(
-            (item) =>
-              Number(item.km)
-          );
+      Array.from(mapa.entries()).map(([rodovia, lista]) => {
+        const kms = lista.map((item) => Number(item.km));
 
-          return {
-            rodovia,
+        return {
+          rodovia,
+          ocorrencias: [...lista].sort(
+            (a, b) =>
+              new Date(b.data).getTime() - new Date(a.data).getTime()
+          ),
+          total: lista.length,
+          criticos: lista.filter((item) => item.classe === "CRITICO").length,
+          atencao: lista.filter((item) => item.classe === "ATENCAO").length,
+          normais: lista.filter((item) => item.classe === "NORMAL").length,
+          pendentes: lista.filter((item) => item.status !== "CONCLUIDO").length,
+          kmInicial: Math.min(...kms),
+          kmFinal: Math.max(...kms),
+        };
+      });
 
-            total:
-              lista.length,
-
-            criticos:
-              lista.filter(
-                (item) =>
-                  item.classe ===
-                  "CRITICO"
-              ).length,
-
-            atencao:
-              lista.filter(
-                (item) =>
-                  item.classe ===
-                  "ATENCAO"
-              ).length,
-
-            normais:
-              lista.filter(
-                (item) =>
-                  item.classe ===
-                  "NORMAL"
-              ).length,
-
-            pendentes:
-              lista.filter(
-                (item) =>
-                  item.status !==
-                  "CONCLUIDO"
-              ).length,
-
-            kmInicial:
-              Math.min(...kms),
-
-            kmFinal:
-              Math.max(...kms),
-          };
-        }
-      );
-
-    return resultado.sort(
-      (a, b) => {
-        if (
-          b.criticos !==
-          a.criticos
-        ) {
-          return (
-            b.criticos -
-            a.criticos
-          );
-        }
-
-        if (
-          b.atencao !==
-          a.atencao
-        ) {
-          return (
-            b.atencao -
-            a.atencao
-          );
-        }
-
-        return (
-          b.total -
-          a.total
-        );
+    return resultado.sort((a, b) => {
+      if (b.criticos !== a.criticos) {
+        return b.criticos - a.criticos;
       }
-    );
+
+      if (b.atencao !== a.atencao) {
+        return b.atencao - a.atencao;
+      }
+
+      return b.total - a.total;
+    });
   }, [ocorrencias]);
 
-  const totalCriticos =
-    ocorrencias.filter(
-      (item) =>
-        item.classe ===
-        "CRITICO"
-    ).length;
+  const totalCriticos = ocorrencias.filter(
+    (item) => item.classe === "CRITICO"
+  ).length;
 
-  const totalPendentes =
-    ocorrencias.filter(
-      (item) =>
-        item.status !==
-        "CONCLUIDO"
-    ).length;
+  const totalPendentes = ocorrencias.filter(
+    (item) => item.status !== "CONCLUIDO"
+  ).length;
 
-  /**
-   * Abrir detalhe de uma ocorrência específica
-   */
-  function abrirOcorrencia(
-    id: string
-  ) {
+
+  function abrirOcorrencia(id: string) {
     router.push({
       pathname: "/trecho-detalhes",
       params: { id },
     });
   }
 
-  /**
-   * Abrir todas as ocorrências de uma rodovia
-   * (Mantido para compatibilidade)
-   */
-  function abrirRodovia(
-    rodovia: string
-  ) {
+  function abrirRodovia(rodovia: string) {
     router.push({
       pathname: "/trecho-detalhes",
       params: { rodovia },
     });
   }
 
+
   return (
-    <SafeAreaView
-      style={
-        styles.container
-      }
+    <ScrollView
+      style={styles.tela}
+      contentContainerStyle={{
+        paddingBottom: insets.bottom + espaco.xxxl,
+      }}
     >
-      <ScrollView
-        contentContainerStyle={
-          styles.content
-        }
-      >
-        {/* CABEÇALHO */}
+      <Cabecalho
+        titulo="Trechos monitorados"
+        subtitulo="Rodovias e ocorrências registradas no VerdeScan"
+        rotuloVoltar="Início"
+        onVoltar={() => router.replace("/")}
+      />
 
-        <View
-          style={
-            styles.header
-          }
-        >
-          <TouchableOpacity
-            onPress={() =>
-              router.replace("/")
-            }
-          >
-            <Text
-              style={
-                styles.voltar
-              }
-            >
-              ← Voltar
-            </Text>
-          </TouchableOpacity>
+      <View style={styles.corpo}>
+        {carregando ? (
+          <Carregando texto="Carregando ocorrências..." />
+        ) : rodovias.length === 0 ? (
+          <View style={styles.vazio}>
+            <EstadoVazio
+              icone="trail-sign-outline"
+              titulo="Nenhuma rodovia cadastrada"
+              texto="Faça uma nova análise para adicionar um trecho ao monitoramento."
+              acao={{
+                titulo: "+ Nova análise",
+                icone: "camera",
+                onPress: () => router.push("/analise"),
+              }}
+            />
+          </View>
+        ) : (
+          <>
+            {/* RESUMO */}
 
-          <Text
-            style={
-              styles.titulo
-            }
-          >
-            Rodovias
-          </Text>
+            <View style={styles.linhaResumo}>
+              <Resumo
+                valor={rodovias.length}
+                rotulo="Rodovias"
+                cor={cores.primaria}
+              />
+              <Resumo
+                valor={totalCriticos}
+                rotulo="Críticos"
+                cor={cores.risco.CRITICO.texto}
+              />
+              <Resumo
+                valor={totalPendentes}
+                rotulo="Abertos"
+                cor={cores.risco.ATENCAO.texto}
+              />
+            </View>
 
-          <Text
-            style={
-              styles.subtitulo
-            }
-          >
-            Trechos monitorados
-            pelo VERDESCAN
-          </Text>
-        </View>
 
-        {/* RESUMO */}
-
-        <View
-          style={
-            styles.resumoContainer
-          }
-        >
-          <View
-            style={
-              styles.resumoCard
-            }
-          >
-            <Text
-              style={
-                styles.resumoNumero
-              }
-            >
-              {rodovias.length}
-            </Text>
+            {/* RODOVIAS */}
 
             <Text
-              style={
-                styles.resumoTexto
-              }
+              style={styles.tituloSecao}
+              accessibilityRole="header"
             >
               Rodovias
             </Text>
-          </View>
 
-          <View
-            style={
-              styles.resumoCard
-            }
-          >
-            <Text
-              style={[
-                styles.resumoNumero,
-                styles.vermelho,
-              ]}
-            >
-              {totalCriticos}
-            </Text>
-
-            <Text
-              style={
-                styles.resumoTexto
-              }
-            >
-              Críticos
-            </Text>
-          </View>
-
-          <View
-            style={
-              styles.resumoCard
-            }
-          >
-            <Text
-              style={[
-                styles.resumoNumero,
-                styles.azul,
-              ]}
-            >
-              {totalPendentes}
-            </Text>
-
-            <Text
-              style={
-                styles.resumoTexto
-              }
-            >
-              Abertos
-            </Text>
-          </View>
-        </View>
-
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Trechos monitorados
-        </Text>
-
-        {/* SEM DADOS */}
-
-        {rodovias.length ===
-        0 ? (
-          <View
-            style={
-              styles.semDados
-            }
-          >
-            <Text
-              style={
-                styles.semDadosTitulo
-              }
-            >
-              Nenhuma rodovia
-              cadastrada
-            </Text>
-
-            <Text
-              style={
-                styles.semDadosTexto
-              }
-            >
-              Faça uma nova
-              análise para
-              adicionar um
-              trecho ao
-              monitoramento.
-            </Text>
-
-            <TouchableOpacity
-              style={
-                styles.botaoAnalise
-              }
-              onPress={() =>
-                router.push(
-                  "/analise"
-                )
-              }
-            >
-              <Text
-                style={
-                  styles.botaoAnaliseTexto
+            {rodovias.map((item) => (
+              <Card
+                key={item.rodovia}
+                onPress={() => abrirRodovia(item.rodovia)}
+                accessibilityLabel={`${item.rodovia}, ${item.total} pontos, ${item.criticos} críticos. Ver histórico.`}
+                corFaixa={
+                  item.criticos > 0
+                    ? cores.risco.CRITICO.cor
+                    : item.atencao > 0
+                      ? cores.risco.ATENCAO.cor
+                      : cores.risco.NORMAL.cor
                 }
+                estilo={styles.cardRodovia}
               >
-                + Nova análise
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          rodovias.map(
-            (item) => (
-              <TouchableOpacity
-                key={
-                  item.rodovia
-                }
-                style={
-                  styles.cardRodovia
-                }
-                onPress={() =>
-                  abrirRodovia(
-                    item.rodovia
-                  )
-                }
-                activeOpacity={
-                  0.8
-                }
-              >
-                <View
-                  style={
-                    styles.cardTopo
-                  }
-                >
-                  <View>
-                    <Text
-                      style={
-                        styles.nomeRodovia
-                      }
-                    >
-                      {
-                        item.rodovia
-                      }
+                <View style={styles.cardTopo}>
+                  <View style={styles.flex}>
+                    <Text style={styles.nomeRodovia}>
+                      {item.rodovia}
                     </Text>
 
-                    <Text
-                      style={
-                        styles.km
-                      }
-                    >
-                      KM{" "}
-                      {
-                        item.kmInicial
-                      }{" "}
-                      até KM{" "}
-                      {
-                        item.kmFinal
-                      }
+                    <Text style={styles.faixaKm}>
+                      {item.kmInicial === item.kmFinal
+                        ? `KM ${item.kmInicial}`
+                        : `KM ${item.kmInicial} até KM ${item.kmFinal}`}
                     </Text>
                   </View>
 
-                  <Text
-                    style={
-                      styles.seta
-                    }
-                  >
-                    ›
-                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={24}
+                    color={cores.textoSuave}
+                  />
                 </View>
 
-                <View
-                  style={
-                    styles.divisor
-                  }
-                />
-
-                <View
-                  style={
-                    styles.dadosLinha
-                  }
-                >
-                  <View
-                    style={
-                      styles.dado
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.dadoNumero
-                      }
-                    >
-                      {
-                        item.total
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.dadoTexto
-                      }
-                    >
-                      Pontos
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      styles.dado
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.dadoNumero,
-                        styles.vermelho,
-                      ]}
-                    >
-                      {
-                        item.criticos
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.dadoTexto
-                      }
-                    >
-                      Críticos
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      styles.dado
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.dadoNumero,
-                        styles.amarelo,
-                      ]}
-                    >
-                      {
-                        item.atencao
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.dadoTexto
-                      }
-                    >
-                      Atenção
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      styles.dado
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.dadoNumero,
-                        styles.verde,
-                      ]}
-                    >
-                      {
-                        item.normais
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.dadoTexto
-                      }
-                    >
-                      Normal
-                    </Text>
-                  </View>
+                <View style={styles.contadores}>
+                  <Contador valor={item.total} rotulo="Pontos" cor={cores.texto} />
+                  <Contador valor={item.criticos} rotulo="Críticos" cor={cores.risco.CRITICO.texto} ponto={cores.risco.CRITICO.cor} />
+                  <Contador valor={item.atencao} rotulo="Atenção" cor={cores.risco.ATENCAO.texto} ponto={cores.risco.ATENCAO.cor} />
+                  <Contador valor={item.normais} rotulo="Normal" cor={cores.risco.NORMAL.texto} ponto={cores.risco.NORMAL.cor} />
                 </View>
 
-                <View
-                  style={
-                    styles.rodapeCard
-                  }
-                >
-                  <Text
-                    style={
-                      styles.pendentes
-                    }
-                  >
-                    {
-                      item.pendentes
-                    }{" "}
-                    ocorrência
-                    {item.pendentes !==
-                    1
-                      ? "s"
-                      : ""}{" "}
-                    em aberto
+                <View style={styles.rodapeCard}>
+                  <Text style={styles.pendentes}>
+                    {item.pendentes}{" "}
+                    {item.pendentes === 1
+                      ? "ocorrência em aberto"
+                      : "ocorrências em aberto"}
                   </Text>
 
-                  <Text
-                    style={
-                      styles.detalhes
-                    }
-                  >
-                    Ver detalhes
+                  <Text style={styles.verHistorico}>
+                    Ver histórico
                   </Text>
                 </View>
-              </TouchableOpacity>
-            )
-          )
-        )}
+              </Card>
+            ))}
 
-        {/* ========== SEÇÃO DE OCORRÊNCIAS DETALHADAS ========== */}
 
-        {ocorrencias.length >
-        0 && (
-          <>
+            {/* OCORRÊNCIAS DETALHADAS */}
+
             <Text
-              style={
-                styles.sectionTitleCards
-              }
+              style={styles.tituloSecao}
+              accessibilityRole="header"
             >
               Ocorrências Detalhadas
             </Text>
 
-            {/* Agrupar por rodovia novamente */}
-            {rodovias.map(
-              (resumoRodovia) => (
-                <View
-                  key={
-                    resumoRodovia.rodovia
-                  }
-                >
-                  {/* Cabeçalho da rodovia */}
-                  <View
-                    style={
-                      styles.rodoviaCabecalho
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.rodoviaNome
-                      }
-                    >
-                      {
-                        resumoRodovia.rodovia
-                      }
-                    </Text>
-                  </View>
+            {rodovias.map((resumo) => (
+              <View key={resumo.rodovia}>
+                <View style={styles.grupoRodovia}>
+                  <Ionicons
+                    name="trail-sign-outline"
+                    size={18}
+                    color={cores.primariaEscura}
+                  />
 
-                  {/* Cards de ocorrência */}
-                  {ocorrencias
-                    .filter(
-                      (occ) =>
-                        occ.rodovia
-                          ?.toUpperCase() ===
-                        resumoRodovia.rodovia
-                          .toUpperCase()
-                    )
-                    .map((occ) => (
-                      <OcorrenciaCard
-                        key={occ.id}
-                        ocorrencia={occ}
-                        onPress={() =>
-                          abrirOcorrencia(
-                            occ.id
-                          )
-                        }
-                      />
-                    ))}
+                  <Text style={styles.grupoRodoviaTexto}>
+                    {resumo.rodovia}
+                  </Text>
                 </View>
-              )
-            )}
+
+                {resumo.ocorrencias.map((ocorrencia) => (
+                  <OcorrenciaCard
+                    key={ocorrencia.id}
+                    ocorrencia={ocorrencia}
+                    onPress={() => abrirOcorrencia(ocorrencia.id)}
+                  />
+                ))}
+              </View>
+            ))}
           </>
         )}
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+    </ScrollView>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor:
-        "#F4F7F4",
-    },
 
-    content: {
-      paddingBottom: 40,
-    },
-
-    header: {
-      backgroundColor:
-        "#164B2A",
-
-      paddingHorizontal: 20,
-
-      paddingTop: 16,
-
-      paddingBottom: 24,
-    },
-
-    voltar: {
-      color: "#D8E7DC",
-
-      fontSize: 14,
-
-      fontWeight: "700",
-
-      marginBottom: 14,
-    },
-
-    titulo: {
-      color: "#FFFFFF",
-
-      fontSize: 28,
-
-      fontWeight: "900",
-    },
-
-    subtitulo: {
-      color: "#D8E7DC",
-
-      fontSize: 13,
-
-      marginTop: 4,
-    },
-
-    resumoContainer: {
-      flexDirection: "row",
-
-      gap: 10,
-
-      paddingHorizontal: 20,
-
-      marginTop: 18,
-    },
-
-    resumoCard: {
-      flex: 1,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      borderRadius: 14,
-
-      paddingVertical: 15,
-
-      alignItems: "center",
-    },
-
-    resumoNumero: {
-      color: "#21894A",
-
-      fontSize: 23,
-
-      fontWeight: "900",
-    },
-
-    resumoTexto: {
-      color: "#6B756E",
-
-      fontSize: 11,
-
-      marginTop: 3,
-    },
-
-    sectionTitle: {
-      color: "#1D2A21",
-
-      fontSize: 19,
-
-      fontWeight: "800",
-
-      marginHorizontal: 20,
-
-      marginTop: 24,
-
-      marginBottom: 12,
-    },
-
-    cardRodovia: {
-      marginHorizontal: 20,
-
-      marginBottom: 13,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      borderRadius: 16,
-
-      padding: 17,
-    },
-
-    cardTopo: {
-      flexDirection: "row",
-
-      justifyContent:
-        "space-between",
-
-      alignItems: "center",
-    },
-
-    nomeRodovia: {
-      color: "#1D2A21",
-
-      fontSize: 19,
-
-      fontWeight: "900",
-    },
-
-    km: {
-      color: "#6B756E",
-
-      fontSize: 12,
-
-      marginTop: 4,
-    },
-
-    seta: {
-      color: "#21894A",
-
-      fontSize: 32,
-
-      fontWeight: "400",
-    },
-
-    divisor: {
-      height: 1,
-
-      backgroundColor:
-        "#EDF0ED",
-
-      marginVertical: 14,
-    },
-
-    dadosLinha: {
-      flexDirection: "row",
-    },
-
-    dado: {
-      flex: 1,
-
-      alignItems: "center",
-    },
-
-    dadoNumero: {
-      color: "#344139",
-
-      fontSize: 17,
-
-      fontWeight: "900",
-    },
-
-    dadoTexto: {
-      color: "#7A847D",
-
-      fontSize: 9,
-
-      marginTop: 2,
-    },
-
-    rodapeCard: {
-      flexDirection: "row",
-
-      justifyContent:
-        "space-between",
-
-      alignItems: "center",
-
-      marginTop: 16,
-    },
-
-    pendentes: {
-      color: "#6B756E",
-
-      fontSize: 11,
-    },
-
-    detalhes: {
-      color: "#21894A",
-
-      fontSize: 11,
-
-      fontWeight: "800",
-    },
-
-    vermelho: {
-      color: "#D63E3E",
-    },
-
-    amarelo: {
-      color: "#C98E11",
-    },
-
-    verde: {
-      color: "#21894A",
-    },
-
-    azul: {
-      color: "#2F6FB5",
-    },
-
-    semDados: {
-      marginHorizontal: 20,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      borderRadius: 16,
-
-      padding: 24,
-
-      alignItems: "center",
-    },
-
-    semDadosTitulo: {
-      color: "#1D2A21",
-
-      fontSize: 17,
-
-      fontWeight: "800",
-    },
-
-    semDadosTexto: {
-      color: "#6B756E",
-
-      fontSize: 12,
-
-      lineHeight: 18,
-
-      textAlign: "center",
-
-      marginTop: 7,
-    },
-
-    botaoAnalise: {
-      marginTop: 17,
-
-      backgroundColor:
-        "#21894A",
-
-      borderRadius: 11,
-
-      paddingHorizontal: 18,
-
-      paddingVertical: 11,
-    },
-
-    botaoAnaliseTexto: {
-      color: "#FFFFFF",
-
-      fontSize: 13,
-
-      fontWeight: "800",
-    },
-
-    sectionTitleCards: {
-      fontSize: 18,
-
-      fontWeight: "bold",
-
-      color:
-        "#164B2A",
-
-      marginHorizontal: 20,
-
-      marginTop: 28,
-
-      marginBottom: 16,
-    },
-
-    rodoviaCabecalho: {
-      paddingHorizontal: 20,
-
-      paddingTop: 12,
-
-      paddingBottom: 8,
-
-      marginTop: 8,
-    },
-
-    rodoviaNome: {
-      fontSize: 16,
-
-      fontWeight: "bold",
-
-      color:
-        "#164B2A",
-    },
-  });
-  
+function Resumo({
+  valor,
+  rotulo,
+  cor,
+}: {
+  valor: number;
+  rotulo: string;
+  cor: string;
+}) {
+  return (
+    <Card estilo={styles.cardResumo}>
+      <Text style={[styles.valorResumo, { color: cor }]}>
+        {valor}
+      </Text>
+
+      <Text style={styles.rotuloResumo}>
+        {rotulo}
+      </Text>
+    </Card>
+  );
+}
+
+
+function Contador({
+  valor,
+  rotulo,
+  cor,
+  ponto,
+}: {
+  valor: number;
+  rotulo: string;
+  cor: string;
+  ponto?: string;
+}) {
+  return (
+    <View style={styles.contador}>
+      <View style={styles.contadorLinha}>
+        {ponto && (
+          <View
+            style={[styles.contadorPonto, { backgroundColor: ponto }]}
+          />
+        )}
+
+        <Text style={[styles.contadorValor, { color: cor }]}>
+          {valor}
+        </Text>
+      </View>
+
+      <Text style={styles.contadorRotulo}>
+        {rotulo}
+      </Text>
+    </View>
+  );
+}
+
+
+const styles = StyleSheet.create({
+  tela: {
+    flex: 1,
+    backgroundColor: cores.fundo,
+  },
+
+  corpo: {
+    paddingHorizontal: espaco.xl,
+    paddingTop: espaco.xl,
+  },
+
+  flex: {
+    flex: 1,
+  },
+
+  vazio: {
+    marginTop: espaco.sm,
+  },
+
+  linhaResumo: {
+    flexDirection: "row",
+    gap: espaco.sm + 2,
+  },
+
+  cardResumo: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: espaco.md,
+  },
+
+  valorResumo: {
+    ...tipografia.numero,
+    fontSize: 26,
+  },
+
+  rotuloResumo: {
+    ...tipografia.rotulo,
+    color: cores.textoSecundario,
+  },
+
+  tituloSecao: {
+    ...tipografia.secao,
+    color: cores.texto,
+    marginTop: espaco.xxl,
+    marginBottom: espaco.md,
+  },
+
+  cardRodovia: {
+    marginBottom: espaco.md,
+  },
+
+  cardTopo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  nomeRodovia: {
+    ...tipografia.titulo,
+    color: cores.texto,
+  },
+
+  faixaKm: {
+    ...tipografia.rotulo,
+    color: cores.textoSecundario,
+    marginTop: 2,
+  },
+
+  contadores: {
+    flexDirection: "row",
+    marginTop: espaco.md,
+    paddingVertical: espaco.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: cores.borda,
+  },
+
+  contador: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  contadorLinha: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.xs,
+  },
+
+  contadorPonto: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+
+  contadorValor: {
+    fontSize: 20,
+    fontWeight: "800",
+  },
+
+  contadorRotulo: {
+    ...tipografia.pequeno,
+    color: cores.textoSecundario,
+    marginTop: 2,
+  },
+
+  rodapeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: espaco.md,
+  },
+
+  pendentes: {
+    ...tipografia.pequeno,
+    color: cores.textoSecundario,
+  },
+
+  verHistorico: {
+    ...tipografia.rotulo,
+    color: cores.primaria,
+    fontWeight: "800",
+  },
+
+  grupoRodovia: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.sm,
+    marginTop: espaco.sm,
+    marginBottom: espaco.sm,
+  },
+
+  grupoRodoviaTexto: {
+    ...tipografia.corpoForte,
+    color: cores.primariaEscura,
+  },
+});

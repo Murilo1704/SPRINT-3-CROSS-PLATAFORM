@@ -19,6 +19,8 @@ import {
   adicionarOcorrencia,
 } from "../services/storage";
 
+import { useSessao } from "./useSessao";
+
 import {
   enviarFotoParaAPI,
   localizarPorRodoviaKm,
@@ -191,6 +193,9 @@ function mensagemDeErroDaAnalise(
 
 export function useAnalise() {
 
+  // Usuário logado: vira o "Registrado por" e a equipe inicial.
+  const { usuario } = useSessao();
+
   // ----------------------------------------------------------
   // FOTO
   // ----------------------------------------------------------
@@ -239,7 +244,7 @@ export function useAnalise() {
     useState("");
 
   const [equipe, setEquipe] =
-    useState("");
+    useState(usuario?.equipe ?? "");
 
   const [veiculo, setVeiculo] =
     useState("");
@@ -943,6 +948,14 @@ export function useAnalise() {
         equipe: equipe.trim() || undefined,
         veiculo: veiculo.trim().toUpperCase() || undefined,
 
+        criadoPor: usuario
+          ? {
+              id: usuario.id,
+              nome: usuario.nome,
+              perfil: usuario.perfil,
+            }
+          : undefined,
+
         status: "PENDENTE",
 
         imagem: fotoUri ?? undefined,
@@ -993,6 +1006,17 @@ export function useAnalise() {
   const podeSalvar =
     resultado !== null &&
     resultado.classe !== "INCONCLUSIVO";
+
+
+  // Etapas obrigatórias para o indicador de progresso da tela.
+  // Localização e detalhes são opcionais (o app resolve sozinho).
+  const etapas = [
+    { nome: "Foto", concluida: fotoUri !== null || resultado?.manual === true },
+    { nome: "Trecho", concluida: rodovia.trim().length > 0 && kmValido },
+    { nome: "Local", concluida: localizacao !== null },
+    { nome: "Risco", concluida: podeSalvar },
+    { nome: "Registro", concluida: local.trim().length > 0 || descricao.trim().length > 0 },
+  ];
 
 
 // ============================================================
@@ -1066,6 +1090,10 @@ export function useAnalise() {
     salvando,
     podeSalvar,
     salvarOcorrencia,
+
+    // progresso
+    kmValido,
+    etapas,
   };
 }
 

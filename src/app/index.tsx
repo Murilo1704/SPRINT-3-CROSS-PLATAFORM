@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import {
   router,
   useFocusEffect,
@@ -8,51 +10,60 @@ import {
   useState,
 } from "react";
 
-import MonitoramentoMap from "../components/MonitoramentoMap";
-
 import {
-  Alert,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import MonitoramentoMap from "../components/MonitoramentoMap";
+import Botao, { NomeIcone } from "../components/ui/Botao";
+import Cabecalho from "../components/ui/Cabecalho";
+import Card from "../components/ui/Card";
+
+import { useSessao } from "../hooks/useSessao";
 
 import {
-  carregarOcorrencias,
-} from "../services/storage";
-
-import {
-  carregarUsuarioLogado,
-  fazerLogout,
-  UsuarioLogado,
+  ehGestor,
+  NOME_PERFIL,
 } from "../services/auth";
 
+import { carregarOcorrencias } from "../services/storage";
+
 import {
-  Ocorrencia,
-} from "../types/Ocorrencia";
+  cores,
+  espaco,
+  raio,
+  tipografia,
+} from "../theme";
+
+import { Ocorrencia } from "../types/Ocorrencia";
+
+import { confirmarAcao } from "../utils/mensagem";
+
+
+function iniciais(nome: string) {
+  return nome
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0]?.toUpperCase())
+    .join("");
+}
 
 
 export default function HomeScreen() {
-  const [
-    ocorrencias,
-    setOcorrencias,
-  ] =
-    useState<Ocorrencia[]>(
-      []
-    );
+  const insets = useSafeAreaInsets();
 
-  const [
-    usuario,
-    setUsuario,
-  ] =
-    useState<UsuarioLogado | null>(
-      null
-    );
+  const { usuario, sair } = useSessao();
+
+  const gestor = ehGestor(usuario);
+
+  const [ocorrencias, setOcorrencias] =
+    useState<Ocorrencia[]>([]);
 
 
   // =========================================================
@@ -61,112 +72,45 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      async function carregar() {
-        const dados =
-          await carregarOcorrencias();
-
-        const usuarioAtual =
-          await carregarUsuarioLogado();
-
-        setOcorrencias(
-          dados
-        );
-
-        setUsuario(
-          usuarioAtual
-        );
-      }
-
-      carregar();
+      carregarOcorrencias().then(setOcorrencias);
     }, [])
   );
 
 
   // =========================================================
   // LOGOUT
+  // O _layout.tsx leva para o login quando o usuário sai.
   // =========================================================
 
-  async function confirmarLogout() {
-    if (
-      Platform.OS ===
-      "web"
-    ) {
-      const confirmar =
-        window.confirm(
-          "Deseja sair do VerdeScan?"
-        );
-
-      if (!confirmar) {
-        return;
-      }
-
-      await sair();
-
-      return;
-    }
-
-
-    Alert.alert(
+  function confirmarLogout() {
+    confirmarAcao(
       "Sair",
       "Deseja sair do VerdeScan?",
-      [
-        {
-          text:
-            "Cancelar",
-
-          style:
-            "cancel",
-        },
-
-        {
-          text:
-            "Sair",
-
-          style:
-            "destructive",
-
-          onPress:
-            sair,
-        },
-      ]
-    );
-  }
-
-
-  async function sair() {
-    await fazerLogout();
-
-    router.replace(
-      "/login"
+      "Sair",
+      sair
     );
   }
 
 
   // =========================================================
-  // CONTADORES REAIS
+  // CONTADORES
   // =========================================================
 
-  const totalMonitorados =
-    ocorrencias.length;
+  const totalMonitorados = ocorrencias.length;
 
+  const totalCriticos = ocorrencias.filter(
+    (ocorrencia) => ocorrencia.classe === "CRITICO"
+  ).length;
 
-  const totalCriticos =
-    ocorrencias.filter(
-      (ocorrencia) =>
-        ocorrencia.classe ===
-        "CRITICO"
-    ).length;
+  const totalPendentes = ocorrencias.filter(
+    (ocorrencia) => ocorrencia.status !== "CONCLUIDO"
+  ).length;
 
-
-  const totalRodovias =
-    new Set(
-      ocorrencias.map(
-        (ocorrencia) =>
-          ocorrencia.rodovia
-            .trim()
-            .toUpperCase()
-      )
-    ).size;
+  const totalRodovias = new Set(
+    ocorrencias.map((ocorrencia) =>
+      ocorrencia.rodovia.trim().toUpperCase()
+    )
+  ).size;
 
 
   // =========================================================
@@ -174,577 +118,300 @@ export default function HomeScreen() {
   // =========================================================
 
   return (
-    <SafeAreaView
-      style={
-        styles.container
-      }
+    <ScrollView
+      style={styles.tela}
+      contentContainerStyle={{
+        paddingBottom: insets.bottom + espaco.xxxl,
+      }}
     >
-      <ScrollView
-        contentContainerStyle={
-          styles.content
+      <Cabecalho
+        titulo="VerdeScan"
+        subtitulo="Monitoramento inteligente de vegetação"
+        acaoDireita={
+          <Botao
+            titulo="Sair"
+            icone="log-out-outline"
+            variante="claro"
+            onPress={confirmarLogout}
+          />
         }
       >
-
-        {/* ==================================================
-            HEADER
-        ================================================== */}
-
-        <View
-          style={
-            styles.header
-          }
-        >
-          <View
-            style={
-              styles.headerTop
-            }
-          >
-            <View
-              style={
-                styles.headerCopy
-              }
-            >
-              <Text
-                style={
-                  styles.logo
-                }
-              >
-                VERDESCAN
-              </Text>
-
-              <Text
-                style={
-                  styles.subtitle
-                }
-              >
-                Monitoramento inteligente
-                de vegetação
+        {usuario && (
+          <View style={styles.usuarioBox}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarTexto}>
+                {iniciais(usuario.nome)}
               </Text>
             </View>
 
-
-            <TouchableOpacity
-              style={
-                styles.logoutButton
-              }
-              onPress={
-                confirmarLogout
-              }
-            >
+            <View style={styles.usuarioInfo}>
               <Text
-                style={
-                  styles.logoutButtonText
-                }
+                style={styles.usuarioNome}
+                numberOfLines={1}
               >
-                Sair
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-
-          <View
-            style={
-              styles.operatorBox
-            }
-          >
-            <View
-              style={
-                styles.operatorAvatar
-              }
-            >
-              <Text
-                style={
-                  styles.operatorAvatarText
-                }
-              >
-                OM
-              </Text>
-            </View>
-
-
-            <View>
-              <Text
-                style={
-                  styles.operatorLabel
-                }
-              >
-                Operador conectado
+                {usuario.nome}
               </Text>
 
-              <Text
-                style={
-                  styles.operatorName
-                }
-              >
-                {usuario?.nome ??
-                  "Operador Master"}
-              </Text>
+              <View style={styles.usuarioLinha}>
+                <View
+                  style={[
+                    styles.badgePerfil,
+                    gestor && styles.badgeGestor,
+                  ]}
+                >
+                  <Ionicons
+                    name={gestor ? "briefcase-outline" : "construct-outline"}
+                    size={14}
+                    color={gestor ? cores.primariaEscura : cores.sobrePrimaria}
+                  />
+
+                  <Text
+                    style={[
+                      styles.badgePerfilTexto,
+                      gestor && styles.badgeGestorTexto,
+                    ]}
+                  >
+                    {NOME_PERFIL[usuario.perfil]}
+                  </Text>
+                </View>
+
+                {usuario.equipe && (
+                  <Text style={styles.usuarioEquipe}>
+                    {usuario.equipe}
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
-        </View>
+        )}
+      </Cabecalho>
 
 
-        {/* ==================================================
-            VISÃO GERAL
-        ================================================== */}
+      <View style={styles.corpo}>
+
+        {/* VISÃO GERAL */}
 
         <Text
-          style={
-            styles.sectionTitle
-          }
+          style={styles.tituloSecao}
+          accessibilityRole="header"
         >
           Visão geral
         </Text>
 
+        <View style={styles.linhaResumo}>
+          <CardResumo
+            icone="layers-outline"
+            valor={totalMonitorados}
+            rotulo="Pontos monitorados"
+            cor={cores.primaria}
+            fundo={cores.primariaClara}
+          />
 
-        <View
-          style={
-            styles.cardsContainer
-          }
-        >
-          <View
-            style={
-              styles.card
-            }
-          >
-            <Text
-              style={
-                styles.cardNumber
-              }
-            >
-              {
-                totalMonitorados
-              }
-            </Text>
+          <CardResumo
+            icone="alert-circle"
+            valor={totalCriticos}
+            rotulo="Pontos críticos"
+            cor={cores.risco.CRITICO.texto}
+            fundo={cores.risco.CRITICO.fundo}
+          />
 
-            <Text
-              style={
-                styles.cardLabel
-              }
-            >
-              Pontos monitorados
-            </Text>
-          </View>
-
-
-          <View
-            style={
-              styles.card
-            }
-          >
-            <Text
-              style={[
-                styles.cardNumber,
-                styles.criticalNumber,
-              ]}
-            >
-              {
-                totalCriticos
-              }
-            </Text>
-
-            <Text
-              style={
-                styles.cardLabel
-              }
-            >
-              Pontos críticos
-            </Text>
-          </View>
-        </View>
-
-
-        {/* ==================================================
-            MAPA
-        ================================================== */}
-
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Mapa de monitoramento
-        </Text>
-
-
-        <View
-          style={
-            styles.mapWrapper
-          }
-        >
-          <MonitoramentoMap
-            ocorrencias={
-              ocorrencias
-            }
+          <CardResumo
+            icone="time-outline"
+            valor={totalPendentes}
+            rotulo="Pendentes de poda"
+            cor={cores.risco.ATENCAO.texto}
+            fundo={cores.risco.ATENCAO.fundo}
           />
         </View>
 
 
-        <View
-          style={
-            styles.legend
-          }
-        >
-          <View
-            style={
-              styles.legendItem
-            }
-          >
-            <View
-              style={[
-                styles.legendPoint,
-                styles.greenPoint,
-              ]}
-            />
+        {/* AÇÃO PRINCIPAL */}
 
-            <Text
-              style={
-                styles.legendText
-              }
-            >
-              Normal
-            </Text>
-          </View>
+        <Botao
+          titulo="Nova análise"
+          icone="camera"
+          tamanho="grande"
+          onPress={() => router.push("/analise")}
+          estilo={styles.botaoNovaAnalise}
+        />
 
 
-          <View
-            style={
-              styles.legendItem
-            }
-          >
-            <View
-              style={[
-                styles.legendPoint,
-                styles.yellowPoint,
-              ]}
-            />
-
-            <Text
-              style={
-                styles.legendText
-              }
-            >
-              Atenção
-            </Text>
-          </View>
-
-
-          <View
-            style={
-              styles.legendItem
-            }
-          >
-            <View
-              style={[
-                styles.legendPoint,
-                styles.redPoint,
-              ]}
-            />
-
-            <Text
-              style={
-                styles.legendText
-              }
-            >
-              Crítico
-            </Text>
-          </View>
-        </View>
-
-
-        {/* ==================================================
-            NOVA ANÁLISE
-        ================================================== */}
-
-        <TouchableOpacity
-          style={
-            styles.analyzeButton
-          }
-          onPress={() =>
-            router.push(
-              "/analise"
-            )
-          }
-        >
-          <Text
-            style={
-              styles.analyzeButtonText
-            }
-          >
-            + Nova análise
-          </Text>
-        </TouchableOpacity>
-
-
-        {/* ==================================================
-            GESTÃO
-        ================================================== */}
+        {/* ATALHOS */}
 
         <Text
-          style={
-            styles.sectionTitle
-          }
+          style={styles.tituloSecao}
+          accessibilityRole="header"
         >
           Gestão das ocorrências
         </Text>
 
+        <Atalho
+          icone="map-outline"
+          titulo="Trechos monitorados"
+          descricao="Histórico agrupado por rodovia e detalhe de cada ocorrência."
+          extra={`${totalRodovias} ${totalRodovias === 1 ? "rodovia registrada" : "rodovias registradas"}`}
+          cor={cores.primaria}
+          fundo={cores.primariaClara}
+          onPress={() => router.push("/rodovias")}
+        />
 
-        {/* TRECHOS MONITORADOS */}
-
-        <TouchableOpacity
-          style={
-            styles.managementCard
-          }
-          onPress={() =>
-            router.push(
-              "/rodovias"
-            )
-          }
-        >
-          <View
-            style={
-              styles.managementLeft
-            }
-          >
-            <View
-              style={
-                styles.roadIconBox
-              }
-            >
-              <Text
-                style={
-                  styles.roadIcon
-                }
-              >
-                R
-              </Text>
-            </View>
-
-
-            <View
-              style={
-                styles.managementText
-              }
-            >
-              <Text
-                style={
-                  styles.managementTitle
-                }
-              >
-                Trechos monitorados
-              </Text>
-
-              <Text
-                style={
-                  styles.managementDescription
-                }
-              >
-                Consulte o histórico
-                agrupado por rodovia.
-              </Text>
-
-              <Text
-                style={
-                  styles.managementExtra
-                }
-              >
-                {totalRodovias}{" "}
-                {totalRodovias === 1
-                  ? "rodovia registrada"
-                  : "rodovias registradas"}
-              </Text>
-            </View>
-          </View>
-
-
-          <Text
-            style={
-              styles.arrow
-            }
-          >
-            ›
-          </Text>
-        </TouchableOpacity>
-
-
-        {/* PONTOS PRIORITÁRIOS */}
-
-        <TouchableOpacity
-          style={[
-            styles.managementCard,
-            styles.secondManagementCard,
-          ]}
-          onPress={() =>
-            router.push(
-              "/prioridades"
-            )
-          }
-        >
-          <View
-            style={
-              styles.managementLeft
-            }
-          >
-            <View
-              style={
-                styles.priorityIconBox
-              }
-            >
-              <Text
-                style={
-                  styles.priorityIcon
-                }
-              >
-                !
-              </Text>
-            </View>
-
-
-            <View
-              style={
-                styles.managementText
-              }
-            >
-              <Text
-                style={
-                  styles.managementTitle
-                }
-              >
-                Pontos prioritários
-              </Text>
-
-              <Text
-                style={
-                  styles.managementDescription
-                }
-              >
-                Consulte ocorrências por
-                período e exporte os dados
-                em CSV.
-              </Text>
-
-              <Text
-                style={
-                  styles.managementExtraCritical
-                }
-              >
-                {totalCriticos}{" "}
-                {totalCriticos === 1
-                  ? "ponto crítico"
-                  : "pontos críticos"}
-              </Text>
-            </View>
-          </View>
-
-
-          <Text
-            style={
-              styles.arrow
-            }
-          >
-            ›
-          </Text>
-        </TouchableOpacity>
-
-
-        {/* ==================================================
-            RESUMO
-        ================================================== */}
-
-        {totalMonitorados > 0 && (
-          <View
-            style={
-              styles.summaryCard
-            }
-          >
-            <Text
-              style={
-                styles.summaryTitle
-              }
-            >
-              Resumo das ocorrências
-            </Text>
-
-
-            <View
-              style={
-                styles.summaryRow
-              }
-            >
-              <Text
-                style={
-                  styles.summaryLabel
-                }
-              >
-                Total registrado
-              </Text>
-
-              <Text
-                style={
-                  styles.summaryValue
-                }
-              >
-                {
-                  totalMonitorados
-                }
-              </Text>
-            </View>
-
-
-            <View
-              style={
-                styles.summaryRow
-              }
-            >
-              <Text
-                style={
-                  styles.summaryLabel
-                }
-              >
-                Rodovias monitoradas
-              </Text>
-
-              <Text
-                style={
-                  styles.summaryValue
-                }
-              >
-                {
-                  totalRodovias
-                }
-              </Text>
-            </View>
-
-
-            <View
-              style={
-                styles.summaryRow
-              }
-            >
-              <Text
-                style={
-                  styles.summaryLabel
-                }
-              >
-                Pontos críticos
-              </Text>
-
-              <Text
-                style={[
-                  styles.summaryValue,
-                  styles.summaryCritical,
-                ]}
-              >
-                {
-                  totalCriticos
-                }
-              </Text>
-            </View>
-          </View>
+        {gestor && (
+          <Atalho
+            icone="flag-outline"
+            titulo="Pontos prioritários"
+            descricao="Ocorrências por período, ordenadas por risco, com exportação CSV."
+            extra={`${totalCriticos} ${totalCriticos === 1 ? "ponto crítico" : "pontos críticos"}`}
+            cor={cores.risco.CRITICO.texto}
+            fundo={cores.risco.CRITICO.fundo}
+            onPress={() => router.push("/prioridades")}
+          />
         )}
 
-      </ScrollView>
-    </SafeAreaView>
+
+        {/* MAPA */}
+
+        <Text
+          style={styles.tituloSecao}
+          accessibilityRole="header"
+        >
+          Mapa de monitoramento
+        </Text>
+
+        <MonitoramentoMap ocorrencias={ocorrencias} />
+
+        <View style={styles.legenda}>
+          {(["NORMAL", "ATENCAO", "CRITICO"] as const).map((classe) => (
+            <View
+              key={classe}
+              style={styles.legendaItem}
+            >
+              <View
+                style={[
+                  styles.legendaPonto,
+                  { backgroundColor: cores.risco[classe].cor },
+                ]}
+              />
+
+              <Text style={styles.legendaTexto}>
+                {classe === "NORMAL"
+                  ? "Normal"
+                  : classe === "ATENCAO"
+                    ? "Atenção"
+                    : "Crítico"}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+      </View>
+    </ScrollView>
+  );
+}
+
+
+// ============================================================
+// CARD DE RESUMO
+// ============================================================
+
+function CardResumo({
+  icone,
+  valor,
+  rotulo,
+  cor,
+  fundo,
+}: {
+  icone: NomeIcone;
+  valor: number;
+  rotulo: string;
+  cor: string;
+  fundo: string;
+}) {
+  return (
+    <Card
+      estilo={styles.cardResumo}
+    >
+      <View
+        style={[styles.iconeResumo, { backgroundColor: fundo }]}
+      >
+        <Ionicons
+          name={icone}
+          size={20}
+          color={cor}
+        />
+      </View>
+
+      <Text
+        style={[styles.valorResumo, { color: cor }]}
+        accessibilityLabel={`${valor} ${rotulo}`}
+      >
+        {valor}
+      </Text>
+
+      <Text style={styles.rotuloResumo}>
+        {rotulo}
+      </Text>
+    </Card>
+  );
+}
+
+
+// ============================================================
+// ATALHO
+// ============================================================
+
+function Atalho({
+  icone,
+  titulo,
+  descricao,
+  extra,
+  cor,
+  fundo,
+  onPress,
+}: {
+  icone: NomeIcone;
+  titulo: string;
+  descricao: string;
+  extra: string;
+  cor: string;
+  fundo: string;
+  onPress: () => void;
+}) {
+  return (
+    <Card
+      onPress={onPress}
+      accessibilityLabel={titulo}
+      estilo={styles.atalho}
+    >
+      <View
+        style={[styles.iconeAtalho, { backgroundColor: fundo }]}
+      >
+        <Ionicons
+          name={icone}
+          size={28}
+          color={cor}
+        />
+      </View>
+
+      <View style={styles.atalhoTexto}>
+        <Text style={styles.atalhoTitulo}>
+          {titulo}
+        </Text>
+
+        <Text style={styles.atalhoDescricao}>
+          {descricao}
+        </Text>
+
+        <Text style={[styles.atalhoExtra, { color: cor }]}>
+          {extra}
+        </Text>
+      </View>
+
+      <Ionicons
+        name="chevron-forward"
+        size={24}
+        color={cores.textoSuave}
+      />
+    </Card>
   );
 }
 
@@ -753,558 +420,186 @@ export default function HomeScreen() {
 // ESTILOS
 // ============================================================
 
-const styles =
-  StyleSheet.create({
-
-    container: {
-      flex: 1,
-
-      backgroundColor:
-        "#F4F7F4",
-    },
-
-
-    content: {
-      paddingBottom: 40,
-    },
-
-
-    header: {
-      backgroundColor:
-        "#164B2A",
-
-      paddingHorizontal: 22,
-
-      paddingTop: 24,
-
-      paddingBottom: 24,
-    },
-
-
-    headerTop: {
-      flexDirection:
-        "row",
-
-      alignItems:
-        "flex-start",
-
-      justifyContent:
-        "space-between",
-    },
-
-
-    headerCopy: {
-      flex: 1,
-
-      paddingRight: 15,
-    },
-
-
-    logo: {
-      fontSize: 28,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#FFFFFF",
-    },
-
-
-    subtitle: {
-      fontSize: 14,
-
-      color:
-        "#D8E7DC",
-
-      marginTop: 4,
-    },
-
-
-    logoutButton: {
-      borderWidth: 1,
-
-      borderColor:
-        "rgba(255,255,255,0.30)",
-
-      borderRadius: 10,
-
-      paddingHorizontal: 15,
-
-      paddingVertical: 9,
-
-      backgroundColor:
-        "rgba(255,255,255,0.10)",
-    },
-
-
-    logoutButtonText: {
-      color:
-        "#FFFFFF",
-
-      fontSize: 13,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    operatorBox: {
-      marginTop: 20,
-
-      flexDirection:
-        "row",
-
-      alignItems:
-        "center",
-
-      backgroundColor:
-        "rgba(255,255,255,0.09)",
-
-      borderRadius: 13,
-
-      padding: 12,
-    },
-
-
-    operatorAvatar: {
-      width: 40,
-
-      height: 40,
-
-      borderRadius: 20,
-
-      backgroundColor:
-        "#21894A",
-
-      alignItems:
-        "center",
-
-      justifyContent:
-        "center",
-
-      marginRight: 11,
-    },
-
-
-    operatorAvatarText: {
-      color:
-        "#FFFFFF",
-
-      fontWeight:
-        "bold",
-
-      fontSize: 13,
-    },
-
-
-    operatorLabel: {
-      color:
-        "#AAC7B3",
-
-      fontSize: 11,
-    },
-
-
-    operatorName: {
-      color:
-        "#FFFFFF",
-
-      fontSize: 14,
-
-      fontWeight:
-        "bold",
-
-      marginTop: 2,
-    },
-
-
-    sectionTitle: {
-      fontSize: 20,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-
-      marginHorizontal: 20,
-
-      marginTop: 24,
-
-      marginBottom: 12,
-    },
-
-
-    cardsContainer: {
-      flexDirection:
-        "row",
-
-      gap: 12,
-
-      paddingHorizontal: 20,
-    },
-
-
-    card: {
-      flex: 1,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      padding: 18,
-
-      borderRadius: 14,
-    },
-
-
-    cardNumber: {
-      fontSize: 28,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#21894A",
-    },
-
-
-    criticalNumber: {
-      color:
-        "#D63E3E",
-    },
-
-
-    cardLabel: {
-      fontSize: 14,
-
-      color:
-        "#5B665E",
-
-      marginTop: 4,
-    },
-
-
-    mapWrapper: {
-      marginHorizontal: 20,
-    },
-
-
-    legend: {
-      flexDirection:
-        "row",
-
-      justifyContent:
-        "center",
-
-      gap: 22,
-
-      marginTop: 12,
-    },
-
-
-    legendItem: {
-      flexDirection:
-        "row",
-
-      alignItems:
-        "center",
-    },
-
-
-    legendPoint: {
-      width: 10,
-
-      height: 10,
-
-      borderRadius: 5,
-
-      marginRight: 6,
-    },
-
-
-    greenPoint: {
-      backgroundColor:
-        "#2E9D50",
-    },
-
-
-    yellowPoint: {
-      backgroundColor:
-        "#E0A82E",
-    },
-
-
-    redPoint: {
-      backgroundColor:
-        "#D63E3E",
-    },
-
-
-    legendText: {
-      fontSize: 13,
-
-      color:
-        "#526157",
-    },
-
-
-    analyzeButton: {
-      marginHorizontal: 20,
-
-      marginTop: 18,
-
-      backgroundColor:
-        "#21894A",
-
-      paddingVertical: 16,
-
-      borderRadius: 14,
-
-      alignItems:
-        "center",
-    },
-
-
-    analyzeButtonText: {
-      color:
-        "#FFFFFF",
-
-      fontSize: 17,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    managementCard: {
-      marginHorizontal: 20,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      borderRadius: 16,
-
-      padding: 18,
-
-      flexDirection:
-        "row",
-
-      justifyContent:
-        "space-between",
-
-      alignItems:
-        "center",
-    },
-
-
-    secondManagementCard: {
-      marginTop: 12,
-    },
-
-
-    managementLeft: {
-      flex: 1,
-
-      flexDirection:
-        "row",
-
-      alignItems:
-        "center",
-    },
-
-
-    managementText: {
-      flex: 1,
-    },
-
-
-    roadIconBox: {
-      width: 46,
-
-      height: 46,
-
-      borderRadius: 23,
-
-      backgroundColor:
-        "#E5F2E9",
-
-      alignItems:
-        "center",
-
-      justifyContent:
-        "center",
-
-      marginRight: 14,
-    },
-
-
-    roadIcon: {
-      color:
-        "#21894A",
-
-      fontSize: 19,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    priorityIconBox: {
-      width: 46,
-
-      height: 46,
-
-      borderRadius: 23,
-
-      backgroundColor:
-        "#FDEAEA",
-
-      alignItems:
-        "center",
-
-      justifyContent:
-        "center",
-
-      marginRight: 14,
-    },
-
-
-    priorityIcon: {
-      color:
-        "#D63E3E",
-
-      fontSize: 22,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    managementTitle: {
-      fontSize: 17,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-    },
-
-
-    managementDescription: {
-      marginTop: 4,
-
-      fontSize: 13,
-
-      lineHeight: 18,
-
-      color:
-        "#6B756E",
-    },
-
-
-    managementExtra: {
-      marginTop: 6,
-
-      fontSize: 11,
-
-      fontWeight:
-        "600",
-
-      color:
-        "#21894A",
-    },
-
-
-    managementExtraCritical: {
-      marginTop: 6,
-
-      fontSize: 11,
-
-      fontWeight:
-        "600",
-
-      color:
-        "#D63E3E",
-    },
-
-
-    arrow: {
-      fontSize: 32,
-
-      color:
-        "#21894A",
-
-      marginLeft: 10,
-    },
-
-
-    summaryCard: {
-      marginHorizontal: 20,
-
-      marginTop: 14,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      borderRadius: 14,
-
-      padding: 18,
-    },
-
-
-    summaryTitle: {
-      fontSize: 15,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-
-      marginBottom: 8,
-    },
-
-
-    summaryRow: {
-      flexDirection:
-        "row",
-
-      justifyContent:
-        "space-between",
-
-      alignItems:
-        "center",
-
-      paddingVertical: 7,
-    },
-
-
-    summaryLabel: {
-      fontSize: 13,
-
-      color:
-        "#6B756E",
-    },
-
-
-    summaryValue: {
-      fontSize: 14,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#21894A",
-    },
-
-
-    summaryCritical: {
-      color:
-        "#D63E3E",
-    },
-
-  });
-
-  
+const styles = StyleSheet.create({
+  tela: {
+    flex: 1,
+    backgroundColor: cores.fundo,
+  },
+
+  corpo: {
+    paddingHorizontal: espaco.xl,
+  },
+
+  usuarioBox: {
+    marginTop: espaco.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.md,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderRadius: raio.lg,
+    padding: espaco.md,
+  },
+
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: cores.primaria,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  avatarTexto: {
+    ...tipografia.corpoForte,
+    color: cores.sobrePrimaria,
+  },
+
+  usuarioInfo: {
+    flex: 1,
+  },
+
+  usuarioNome: {
+    ...tipografia.corpoForte,
+    fontSize: 17,
+    color: cores.textoSobreEscuro,
+  },
+
+  usuarioLinha: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: espaco.sm,
+    marginTop: espaco.xs,
+  },
+
+  badgePerfil: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.xs,
+    backgroundColor: cores.primaria,
+    borderRadius: raio.pilula,
+    paddingHorizontal: espaco.sm + 2,
+    paddingVertical: 3,
+  },
+
+  badgeGestor: {
+    backgroundColor: cores.destaque,
+  },
+
+  badgePerfilTexto: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: cores.sobrePrimaria,
+  },
+
+  badgeGestorTexto: {
+    color: cores.primariaEscura,
+  },
+
+  usuarioEquipe: {
+    ...tipografia.pequeno,
+    color: cores.textoSobreEscuroSuave,
+  },
+
+  tituloSecao: {
+    ...tipografia.secao,
+    color: cores.texto,
+    marginTop: espaco.xxl,
+    marginBottom: espaco.md,
+  },
+
+  linhaResumo: {
+    flexDirection: "row",
+    gap: espaco.sm + 2,
+  },
+
+  cardResumo: {
+    flex: 1,
+    padding: espaco.md,
+  },
+
+  iconeResumo: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: espaco.sm,
+  },
+
+  valorResumo: {
+    ...tipografia.numero,
+  },
+
+  rotuloResumo: {
+    ...tipografia.pequeno,
+    color: cores.textoSecundario,
+    marginTop: 2,
+  },
+
+  botaoNovaAnalise: {
+    marginTop: espaco.xl,
+  },
+
+  atalho: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.md,
+    marginBottom: espaco.md,
+    minHeight: 96,
+  },
+
+  iconeAtalho: {
+    width: 56,
+    height: 56,
+    borderRadius: raio.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  atalhoTexto: {
+    flex: 1,
+  },
+
+  atalhoTitulo: {
+    ...tipografia.corpoForte,
+    fontSize: 17,
+    color: cores.texto,
+  },
+
+  atalhoDescricao: {
+    ...tipografia.pequeno,
+    color: cores.textoSecundario,
+    marginTop: 2,
+  },
+
+  atalhoExtra: {
+    ...tipografia.pequeno,
+    fontWeight: "700",
+    marginTop: espaco.xs,
+  },
+
+  legenda: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: espaco.xl,
+    marginTop: espaco.md,
+  },
+
+  legendaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.xs + 2,
+  },
+
+  legendaPonto: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+
+  legendaTexto: {
+    ...tipografia.rotulo,
+    color: cores.textoSecundario,
+  },
+});

@@ -1,12 +1,14 @@
 import {
-  Text,
-  TextInput,
   View,
 } from "react-native";
 
 import { AnaliseState } from "../../hooks/useAnalise";
 
+import Campo from "../ui/Campo";
+import Card from "../ui/Card";
+
 import { styles } from "./styles";
+import TituloPasso from "./TituloPasso";
 
 
 type Props = {
@@ -22,43 +24,46 @@ export default function SecaoTrecho({ analise }: Props) {
   const {
     rodovia,
     km,
+    kmValido,
     alterarRodovia,
     alterarKm,
   } = analise;
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        2. Trecho da rodovia
-      </Text>
+    <View style={styles.secao}>
+      <TituloPasso
+        numero={2}
+        titulo="Trecho da rodovia"
+        concluido={rodovia.trim().length > 0 && kmValido}
+      />
 
-      <View style={[styles.card, styles.formCard]}>
-        <Text style={styles.inputLabel}>
-          Rodovia *
-        </Text>
+      <Card>
+        <View style={styles.linha}>
+          <Campo
+            rotulo="Rodovia"
+            obrigatorio
+            icone="trail-sign-outline"
+            value={rodovia}
+            onChangeText={alterarRodovia}
+            placeholder="Ex.: SP-330"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            estiloContainer={styles.colunaFlex}
+          />
 
-        <TextInput
-          style={styles.input}
-          value={rodovia}
-          onChangeText={alterarRodovia}
-          placeholder="Ex.: SP-330"
-          placeholderTextColor="#9AA39C"
-          autoCapitalize="characters"
-        />
-
-        <Text style={[styles.inputLabel, styles.secondInputLabel]}>
-          KM *
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          value={km}
-          onChangeText={alterarKm}
-          placeholder="Ex.: 100"
-          placeholderTextColor="#9AA39C"
-          keyboardType="decimal-pad"
-        />
-      </View>
+          <Campo
+            rotulo="KM"
+            obrigatorio
+            icone="speedometer-outline"
+            value={km}
+            onChangeText={alterarKm}
+            placeholder="Ex.: 100"
+            keyboardType="decimal-pad"
+            erro={km.trim() && !kmValido ? "KM inválido" : null}
+            estiloContainer={styles.colunaFlex}
+          />
+        </View>
+      </Card>
     </View>
   );
 }

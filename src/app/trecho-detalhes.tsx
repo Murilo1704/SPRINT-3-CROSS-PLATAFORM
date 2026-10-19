@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import {
   router,
   useFocusEffect,
@@ -10,17 +12,21 @@ import {
 } from "react";
 
 import {
-  Alert,
   Image,
-  Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import BadgeRisco from "../components/ui/BadgeRisco";
+import Botao, { NomeIcone } from "../components/ui/Botao";
+import Cabecalho from "../components/ui/Cabecalho";
+import Card from "../components/ui/Card";
+import Carregando from "../components/ui/Carregando";
+import EstadoVazio from "../components/ui/EstadoVazio";
 
 import {
   NOME_RISCO,
@@ -29,6 +35,14 @@ import {
   violaContrato,
 } from "../constants/risco";
 
+import { useSessao } from "../hooks/useSessao";
+
+import {
+  ehGestor,
+  NOME_PERFIL,
+  PerfilUsuario,
+} from "../services/auth";
+
 import {
   atualizarOcorrencia,
   carregarOcorrencias,
@@ -36,271 +50,97 @@ import {
 } from "../services/storage";
 
 import {
-  Ocorrencia,
-} from "../types/Ocorrencia";
+  cores,
+  espaco,
+  raio,
+  tipografia,
+} from "../theme";
+
+import { Ocorrencia } from "../types/Ocorrencia";
+
+import {
+  confirmarAcao,
+  mostrarMensagem,
+} from "../utils/mensagem";
 
 
 // ============================================================
-// FORMATAR DATA
+// FORMATAÇÃO
 // ============================================================
 
-function formatarDataHora(
-  dataIso: string
-) {
-  const data =
-    new Date(
-      dataIso
-    );
+function formatarDataHora(dataIso: string) {
+  const data = new Date(dataIso);
 
-
-  if (
-    Number.isNaN(
-      data.getTime()
-    )
-  ) {
+  if (Number.isNaN(data.getTime())) {
     return dataIso;
   }
 
-
-  return data.toLocaleString(
-    "pt-BR",
-    {
-      day:
-        "2-digit",
-
-      month:
-        "2-digit",
-
-      year:
-        "numeric",
-
-      hour:
-        "2-digit",
-
-      minute:
-        "2-digit",
-
-      hour12:
-        false,
-    }
-  );
+  return data.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 
-// ============================================================
-// CLASSE
-// ============================================================
+const NOME_STATUS: Record<Ocorrencia["status"], string> = {
+  PENDENTE: "PENDENTE",
+  EM_ANDAMENTO: "EM ANDAMENTO",
+  CONCLUIDO: "CONCLUÍDO",
+};
 
-function nomeClasse(
-  classe:
-    Ocorrencia["classe"]
+
+function textoRegistradoPor(
+  criadoPor: Ocorrencia["criadoPor"]
 ) {
-  if (
-    classe ===
-    "CRITICO"
-  ) {
-    return "CRÍTICO";
+  if (!criadoPor) {
+    return undefined;
   }
 
+  const perfil =
+    NOME_PERFIL[criadoPor.perfil as PerfilUsuario] ?? criadoPor.perfil;
 
-  if (
-    classe ===
-    "ATENCAO"
-  ) {
-    return "ATENÇÃO";
-  }
-
-
-  return "NORMAL";
+  return `${criadoPor.nome} (${perfil})`;
 }
 
 
 // ============================================================
-// STATUS
+// LINHA DE INFORMAÇÃO
 // ============================================================
 
-function nomeStatus(
-  status:
-    Ocorrencia["status"]
-) {
-  if (
-    status ===
-    "EM_ANDAMENTO"
-  ) {
-    return "EM ANDAMENTO";
-  }
-
-
-  if (
-    status ===
-    "CONCLUIDO"
-  ) {
-    return "CONCLUÍDO";
-  }
-
-
-  return "PENDENTE";
-}
-
-
-// ============================================================
-// MENSAGEM
-// ============================================================
-
-function mostrarMensagem(
-  titulo: string,
-  mensagem: string
-) {
-  if (
-    Platform.OS ===
-    "web"
-  ) {
-    alert(
-      `${titulo}\n\n${mensagem}`
-    );
-
-    return;
-  }
-
-
-  Alert.alert(
-    titulo,
-    mensagem
-  );
-}
-
-
-// ============================================================
-// DETALHES DO REGISTRO
-// Mostra só as linhas preenchidas.
-// ============================================================
-
-function DetalhesRegistro({
-  ocorrencia,
+function LinhaInfo({
+  icone,
+  rotulo,
+  valor,
 }: {
-  ocorrencia: Ocorrencia;
+  icone: NomeIcone;
+  rotulo: string;
+  valor?: string;
 }) {
-
-  const linhas: [string, string | undefined][] = [
-    [
-      "Risco",
-      NOME_RISCO[
-        ocorrencia.risco ??
-        riscoPorClasse(
-          ocorrencia.classe
-        )
-      ],
-    ],
-
-    [
-      "Local",
-      ocorrencia.local,
-    ],
-
-    [
-      "Descrição",
-      ocorrencia.descricao,
-    ],
-
-    [
-      "Zona",
-      ocorrencia.zona
-        ? NOME_ZONA[
-            ocorrencia.zona
-          ]
-        : undefined,
-    ],
-
-    [
-      "Equipe",
-      ocorrencia.equipe,
-    ],
-
-    [
-      "Veículo",
-      ocorrencia.veiculo,
-    ],
-
-    [
-      "Poda concluída em",
-      ocorrencia.dataConclusao
-        ? formatarDataHora(
-            ocorrencia.dataConclusao
-          )
-        : undefined,
-    ],
-  ];
-
-
-  const foraDoContrato =
-    violaContrato(
-      ocorrencia.classe,
-      ocorrencia.zona
-    ) &&
-    ocorrencia.status !==
-      "CONCLUIDO";
-
+  if (!valor) {
+    return null;
+  }
 
   return (
-    <>
-      <View
-        style={
-          styles.detailsBox
-        }
-      >
-        {linhas
-          .filter(
-            ([, valor]) =>
-              !!valor
-          )
-          .map(
-            ([rotulo, valor]) => (
-              <View
-                key={
-                  rotulo
-                }
-                style={
-                  styles.detailRow
-                }
-              >
-                <Text
-                  style={
-                    styles.detailLabel
-                  }
-                >
-                  {rotulo}
-                </Text>
+    <View
+      style={styles.linhaInfo}
+      accessible
+      accessibilityLabel={`${rotulo}: ${valor}`}
+    >
+      <Ionicons
+        name={icone}
+        size={20}
+        color={cores.textoSuave}
+        style={styles.linhaIcone}
+      />
 
-                <Text
-                  style={[
-                    styles.detailValue,
-                    styles.detailValueLong,
-                  ]}
-                >
-                  {valor}
-                </Text>
-              </View>
-            )
-          )}
-      </View>
+      <Text style={styles.linhaRotulo}>{rotulo}</Text>
 
-
-      {foraDoContrato && (
-        <View
-          style={
-            styles.contractAlert
-          }
-        >
-          <Text
-            style={
-              styles.contractAlertText
-            }
-          >
-            Fora do limite do contrato: priorizar a poda.
-          </Text>
-        </View>
-      )}
-    </>
+      <Text style={styles.linhaValor}>{valor}</Text>
+    </View>
   );
 }
 
@@ -310,132 +150,86 @@ function DetalhesRegistro({
 // ============================================================
 
 export default function TrechoDetalhesScreen() {
+  const insets = useSafeAreaInsets();
 
-  const params =
-    useLocalSearchParams<{
-      rodovia?: string;
-      id?: string;
-    }>();
+  const { usuario } = useSessao();
 
+  const podeExcluir = ehGestor(usuario);
+
+  const params = useLocalSearchParams<{
+    rodovia?: string;
+    id?: string;
+  }>();
 
   const rodovia =
-    typeof params.rodovia ===
-    "string"
-      ? params.rodovia
-      : "";
+    typeof params.rodovia === "string" ? params.rodovia : "";
 
   const ocorrenciaId =
-    typeof params.id ===
-    "string"
-      ? params.id
-      : "";
+    typeof params.id === "string" ? params.id : "";
+
+  const [ocorrencias, setOcorrencias] =
+    useState<Ocorrencia[]>([]);
+
+  const [carregando, setCarregando] =
+    useState(true);
+
+  const [concluindo, setConcluindo] =
+    useState<string | null>(null);
 
 
-  const [
-    ocorrencias,
-    setOcorrencias,
-  ] =
-    useState<Ocorrencia[]>(
-      []
+  // =========================================================
+  // CARREGAR (uma ocorrência por id ou o histórico da rodovia)
+  // =========================================================
+
+  const carregar = useCallback(async () => {
+    const dados = await carregarOcorrencias();
+
+    let filtradas: Ocorrencia[] = [];
+
+    if (ocorrenciaId) {
+      filtradas = dados.filter((item) => item.id === ocorrenciaId);
+    } else if (rodovia) {
+      filtradas = dados.filter(
+        (item) =>
+          item.rodovia.trim().toUpperCase() ===
+          rodovia.trim().toUpperCase()
+      );
+    }
+
+    // Mais recente primeiro
+    filtradas.sort(
+      (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
     );
 
-
-  // ==========================================================
-  // CARREGAR HISTÓRICO
-  // ==========================================================
-
-  const carregar = useCallback(
-    async () => {
-
-      const dados =
-        await carregarOcorrencias();
-
-      let filtradas: Ocorrencia[] = [];
-
-      // Se ID foi fornecido, filtrar por ID
-      if (ocorrenciaId) {
-        filtradas = dados.filter(
-          (item) => item.id === ocorrenciaId
-        );
-      } 
-      // Se rodovia foi fornecida, filtrar por rodovia
-      else if (rodovia) {
-        filtradas = dados
-          .filter(
-            (item) =>
-              item.rodovia
-                .trim()
-                .toUpperCase() ===
-              rodovia
-                .trim()
-                .toUpperCase()
-          );
-      }
-
-      // Ordenar por data (mais recente primeiro)
-      filtradas.sort(
-        (a, b) =>
-          new Date(
-            b.data
-          ).getTime() -
-          new Date(
-            a.data
-          ).getTime()
-      );
-
-      setOcorrencias(
-        filtradas
-      );
-
-    },
-    [
-      rodovia,
-      ocorrenciaId,
-    ]
-  );
-
+    setOcorrencias(filtradas);
+    setCarregando(false);
+  }, [rodovia, ocorrenciaId]);
 
   useFocusEffect(
     useCallback(() => {
-
       carregar();
-
-    }, [
-      carregar,
-    ])
+    }, [carregar])
   );
 
 
-  // ==========================================================
-  // EXCLUIR
-  // ==========================================================
+  // =========================================================
+  // EXCLUIR (somente gestor)
+  // =========================================================
 
-  async function excluirOcorrencia(
-    id: string
-  ) {
+  async function excluirOcorrencia(id: string) {
+    if (!podeExcluir) {
+      return;
+    }
+
     try {
+      await removerOcorrencia(id);
 
-      await removerOcorrencia(
-        id
+      setOcorrencias((atuais) =>
+        atuais.filter((item) => item.id !== id)
       );
-
-
-      setOcorrencias(
-        (dadosAtuais) =>
-          dadosAtuais.filter(
-            (item) =>
-              item.id !== id
-          )
-      );
-
 
     } catch (error) {
-
-      console.error(
-        "Erro ao excluir ocorrência:",
-        error
-      );
-
+      console.error("Erro ao excluir ocorrência:", error);
 
       mostrarMensagem(
         "Erro",
@@ -444,632 +238,331 @@ export default function TrechoDetalhesScreen() {
     }
   }
 
+  function confirmarExclusao(ocorrencia: Ocorrencia) {
+    confirmarAcao(
+      "Excluir ocorrência",
+      `Deseja excluir a ocorrência da ${ocorrencia.rodovia} no KM ${ocorrencia.km}?`,
+      "Excluir",
+      () => excluirOcorrencia(ocorrencia.id)
+    );
+  }
 
-  // ==========================================================
-  // MARCAR PODA COMO CONCLUÍDA
-  // ==========================================================
 
-  async function concluirPoda(
-    ocorrencia:
-      Ocorrencia
-  ) {
+  // =========================================================
+  // MARCAR PODA COMO CONCLUÍDA (operador e gestor)
+  // =========================================================
+
+  async function concluirPoda(ocorrencia: Ocorrencia) {
     try {
+      setConcluindo(ocorrencia.id);
 
       const atualizada: Ocorrencia = {
         ...ocorrencia,
-
-        status:
-          "CONCLUIDO",
-
-        dataConclusao:
-          new Date()
-            .toISOString(),
+        status: "CONCLUIDO",
+        dataConclusao: new Date().toISOString(),
       };
 
+      await atualizarOcorrencia(atualizada);
 
-      await atualizarOcorrencia(
-        atualizada
+      setOcorrencias((atuais) =>
+        atuais.map((item) =>
+          item.id === atualizada.id ? atualizada : item
+        )
       );
-
-
-      setOcorrencias(
-        (dadosAtuais) =>
-          dadosAtuais.map(
-            (item) =>
-              item.id ===
-              atualizada.id
-                ? atualizada
-                : item
-          )
-      );
-
 
       mostrarMensagem(
         "Poda concluída",
         `A poda da ${ocorrencia.rodovia} no KM ${ocorrencia.km} foi registrada como concluída.`
       );
 
-
     } catch (error) {
-
-      console.error(
-        "Erro ao concluir poda:",
-        error
-      );
-
+      console.error("Erro ao concluir poda:", error);
 
       mostrarMensagem(
         "Erro",
         "Não foi possível atualizar a ocorrência."
       );
+
+    } finally {
+      setConcluindo(null);
     }
   }
 
 
-  // ==========================================================
-  // CONFIRMAR EXCLUSÃO
-  // ==========================================================
+  // =========================================================
+  // INTERFACE
+  // =========================================================
 
-  function confirmarExclusao(
-    ocorrencia:
-      Ocorrencia
-  ) {
-
-    const mensagem =
-      `Deseja excluir a ocorrência da ${ocorrencia.rodovia} no KM ${ocorrencia.km}?`;
-
-
-    if (
-      Platform.OS ===
-      "web"
-    ) {
-
-      const confirmou =
-        window.confirm(
-          mensagem
-        );
-
-
-      if (
-        confirmou
-      ) {
-        excluirOcorrencia(
-          ocorrencia.id
-        );
-      }
-
-
-      return;
-    }
-
-
-    Alert.alert(
-      "Excluir ocorrência",
-      mensagem,
-      [
-        {
-          text:
-            "Cancelar",
-
-          style:
-            "cancel",
-        },
-
-        {
-          text:
-            "Excluir",
-
-          style:
-            "destructive",
-
-          onPress:
-            () =>
-              excluirOcorrencia(
-                ocorrencia.id
-              ),
-        },
-      ]
-    );
-  }
-
-
-  // ==========================================================
-  // RESUMO
-  // ==========================================================
-
-  const totalCriticos =
-    ocorrencias.filter(
-      (item) =>
-        item.classe ===
-        "CRITICO"
-    ).length;
-
+  const totalCriticos = ocorrencias.filter(
+    (item) => item.classe === "CRITICO"
+  ).length;
 
   // Ao abrir pela lista (por id), o parâmetro "rodovia" não vem.
   const titulo =
-    rodovia ||
-    ocorrencias[0]?.rodovia ||
-    "Ocorrência";
-
-
-  // ==========================================================
-  // INTERFACE
-  // ==========================================================
+    rodovia || ocorrencias[0]?.rodovia || "Ocorrência";
 
   return (
-    <SafeAreaView
-      style={
-        styles.container
-      }
+    <ScrollView
+      style={styles.tela}
+      contentContainerStyle={{
+        paddingBottom: insets.bottom + espaco.xxxl,
+      }}
     >
-
-      <ScrollView
-        contentContainerStyle={
-          styles.content
+      <Cabecalho
+        titulo={titulo}
+        subtitulo={
+          ocorrenciaId
+            ? "Detalhe da ocorrência"
+            : "Histórico de análises da rodovia"
         }
-      >
+        rotuloVoltar="Trechos"
+        onVoltar={() =>
+          router.canGoBack() ? router.back() : router.replace("/rodovias")
+        }
+      />
 
-        {/* HEADER */}
+      <View style={styles.corpo}>
 
-        <View
-          style={
-            styles.header
-          }
-        >
+        {/* RESUMO (somente no histórico da rodovia) */}
 
-          <Pressable
-            style={
-              styles.backButton
-            }
-            onPress={() =>
-              router.back()
-            }
-          >
-
-            <Text
-              style={
-                styles.backButtonText
-              }
-            >
-              ← Trechos
-            </Text>
-
-          </Pressable>
-
-
-          <Text
-            style={
-              styles.title
-            }
-          >
-            {titulo}
-          </Text>
-
-
-          <Text
-            style={
-              styles.subtitle
-            }
-          >
-            {ocorrenciaId
-              ? "Detalhe da ocorrência"
-              : "Histórico de análises da rodovia"}
-          </Text>
-
-        </View>
-
-
-        {/* RESUMO */}
-
-        <View
-          style={
-            styles.summaryRow
-          }
-        >
-
-          <View
-            style={
-              styles.summaryCard
-            }
-          >
-
-            <Text
-              style={
-                styles.summaryNumber
-              }
-            >
-              {
-                ocorrencias.length
-              }
-            </Text>
-
-            <Text
-              style={
-                styles.summaryLabel
-              }
-            >
-              Análises
-            </Text>
-
-          </View>
-
-
-          <View
-            style={
-              styles.summaryCard
-            }
-          >
-
-            <Text
-              style={[
-                styles.summaryNumber,
-                styles.criticalNumber,
-              ]}
-            >
-              {
-                totalCriticos
-              }
-            </Text>
-
-            <Text
-              style={
-                styles.summaryLabel
-              }
-            >
-              Críticas
-            </Text>
-
-          </View>
-
-        </View>
-
-
-        {/* HISTÓRICO */}
-
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Histórico
-        </Text>
-
-
-        {
-          ocorrencias.length ===
-          0 ? (
-
-            <View
-              style={
-                styles.emptyCard
-              }
-            >
-
-              <Text
-                style={
-                  styles.emptyTitle
-                }
-              >
-                Nenhuma análise encontrada
+        {!ocorrenciaId && ocorrencias.length > 0 && (
+          <View style={styles.linhaResumo}>
+            <Card estilo={styles.cardResumo}>
+              <Text style={[styles.valorResumo, { color: cores.primaria }]}>
+                {ocorrencias.length}
               </Text>
+              <Text style={styles.rotuloResumo}>Análises</Text>
+            </Card>
 
-              <Text
-                style={
-                  styles.emptyText
-                }
-              >
-                Novas análises desta rodovia aparecerão aqui.
+            <Card estilo={styles.cardResumo}>
+              <Text style={[styles.valorResumo, { color: cores.risco.CRITICO.texto }]}>
+                {totalCriticos}
               </Text>
+              <Text style={styles.rotuloResumo}>Críticas</Text>
+            </Card>
+          </View>
+        )}
 
-            </View>
+        {carregando ? (
+          <Carregando texto="Carregando ocorrência..." />
+        ) : ocorrencias.length === 0 ? (
+          <EstadoVazio
+            icone="document-text-outline"
+            titulo="Nenhuma análise encontrada"
+            texto="Novas análises desta rodovia aparecerão aqui."
+            acao={{
+              titulo: "Voltar para os trechos",
+              icone: "map-outline",
+              onPress: () => router.replace("/rodovias"),
+            }}
+          />
+        ) : (
+          ocorrencias.map((ocorrencia) => {
+            const foraDoContrato =
+              violaContrato(ocorrencia.classe, ocorrencia.zona) &&
+              ocorrencia.status !== "CONCLUIDO";
 
-          ) : (
+            const concluida =
+              ocorrencia.status === "CONCLUIDO";
 
-            ocorrencias.map(
-              (
-                ocorrencia
-              ) => (
+            return (
+              <Card
+                key={ocorrencia.id}
+                corFaixa={cores.risco[ocorrencia.classe].cor}
+                estilo={styles.card}
+              >
+
+                {/* TOPO: KM + DATA + RISCO */}
+
+                <View style={styles.topo}>
+                  <View style={styles.flex}>
+                    <Text style={styles.km}>
+                      KM {ocorrencia.km}
+                    </Text>
+
+                    <Text style={styles.data}>
+                      {formatarDataHora(ocorrencia.data)}
+                    </Text>
+                  </View>
+
+                  <BadgeRisco
+                    classe={ocorrencia.classe}
+                    tamanho="grande"
+                  />
+                </View>
+
+
+                {/* STATUS */}
 
                 <View
-                  key={
-                    ocorrencia.id
-                  }
-                  style={
-                    styles.card
-                  }
+                  style={[
+                    styles.status,
+                    concluida ? styles.statusConcluido : styles.statusAberto,
+                  ]}
                 >
+                  <Ionicons
+                    name={concluida ? "checkmark-circle" : "time-outline"}
+                    size={18}
+                    color={concluida ? cores.sucesso : cores.aviso}
+                  />
 
-                  {/* TOPO */}
-
-                  <View
-                    style={
-                      styles.cardTop
-                    }
+                  <Text
+                    style={[
+                      styles.statusTexto,
+                      { color: concluida ? cores.sucesso : cores.aviso },
+                    ]}
                   >
-
-                    <View>
-
-                      <Text
-                        style={
-                          styles.km
-                        }
-                      >
-                        KM{" "}
-                        {
-                          ocorrencia.km
-                        }
-                      </Text>
+                    Status: {NOME_STATUS[ocorrencia.status]}
+                  </Text>
+                </View>
 
 
-                      <Text
-                        style={
-                          styles.date
-                        }
-                      >
-                        {
-                          formatarDataHora(
-                            ocorrencia.data
-                          )
-                        }
-                      </Text>
+                {/* ALERTA DE CONTRATO */}
 
-                    </View>
-
-
-                    <View
-                      style={[
-                        styles.badge,
-
-                        ocorrencia.classe ===
-                        "CRITICO"
-                          ?
-                          styles.criticalBadge
-
-                          :
-
-                          ocorrencia.classe ===
-                          "ATENCAO"
-                            ?
-                            styles.attentionBadge
-
-                            :
-                            styles.normalBadge,
-                      ]}
-                    >
-
-                      <Text
-                        style={
-                          styles.badgeText
-                        }
-                      >
-                        {
-                          nomeClasse(
-                            ocorrencia.classe
-                          )
-                        }
-                      </Text>
-
-                    </View>
-
-                  </View>
-
-
-                  {/* DETALHES */}
-
+                {foraDoContrato && (
                   <View
-                    style={
-                      styles.detailsBox
-                    }
+                    style={styles.alertaContrato}
+                    accessibilityRole="alert"
                   >
+                    <Ionicons
+                      name="warning"
+                      size={22}
+                      color={cores.perigo}
+                    />
 
-                    <View
-                      style={
-                        styles.detailRow
-                      }
-                    >
-
-                      <Text
-                        style={
-                          styles.detailLabel
-                        }
-                      >
-                        Classificação
-                      </Text>
-
-
-                      <Text
-                        style={
-                          styles.detailValue
-                        }
-                      >
-                        {ocorrencia.origemClassificacao ===
-                        "MANUAL"
-                          ? "Manual (operador)"
-                          : `IA · ${(
-                              ocorrencia.confianca *
-                              100
-                            ).toFixed(2)}%`}
-                      </Text>
-
-                    </View>
-
-
-                    <View
-                      style={
-                        styles.detailRow
-                      }
-                    >
-
-                      <Text
-                        style={
-                          styles.detailLabel
-                        }
-                      >
-                        Status
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.detailValue
-                        }
-                      >
-                        {
-                          nomeStatus(
-                            ocorrencia.status
-                          )
-                        }
-                      </Text>
-
-                    </View>
-
-
-                    <View
-                      style={
-                        styles.detailRow
-                      }
-                    >
-
-                      <Text
-                        style={
-                          styles.detailLabel
-                        }
-                      >
-                        Latitude
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.detailValue
-                        }
-                      >
-                        {
-                          ocorrencia.latitude
-                            .toFixed(
-                              6
-                            )
-                        }
-                      </Text>
-
-                    </View>
-
-
-                    <View
-                      style={
-                        styles.detailRow
-                      }
-                    >
-
-                      <Text
-                        style={
-                          styles.detailLabel
-                        }
-                      >
-                        Longitude
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.detailValue
-                        }
-                      >
-                        {
-                          ocorrencia.longitude
-                            .toFixed(
-                              6
-                            )
-                        }
-                      </Text>
-
-                    </View>
-
+                    <Text style={styles.alertaContratoTexto}>
+                      Fora do limite do contrato: priorizar a poda.
+                    </Text>
                   </View>
+                )}
 
 
-                  {/* DADOS DO REGISTRO */}
+                {/* INFORMAÇÕES */}
 
-                  <DetalhesRegistro
-                    ocorrencia={
-                      ocorrencia
+                <View style={styles.infos}>
+                  <LinhaInfo
+                    icone={
+                      ocorrencia.origemClassificacao === "MANUAL"
+                        ? "hand-left-outline"
+                        : "sparkles"
+                    }
+                    rotulo="Classificação"
+                    valor={
+                      ocorrencia.origemClassificacao === "MANUAL"
+                        ? "Manual (operador)"
+                        : `IA · ${(ocorrencia.confianca * 100).toFixed(2)}%`
                     }
                   />
 
-
-                  {/* FOTO */}
-
-                  {
-                    ocorrencia.imagem &&
-                    (
-                      <Image
-                        source={{
-                          uri:
-                            ocorrencia.imagem,
-                        }}
-                        style={
-                          styles.image
-                        }
-                      />
-                    )
-                  }
-
-
-                  {/* CONCLUIR PODA */}
-
-                  {ocorrencia.status !==
-                    "CONCLUIDO" && (
-                    <Pressable
-                      style={
-                        styles.concludeButton
-                      }
-                      onPress={() =>
-                        concluirPoda(
-                          ocorrencia
-                        )
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.concludeButtonText
-                        }
-                      >
-                        Marcar poda como concluída
-                      </Text>
-                    </Pressable>
-                  )}
-
-
-                  {/* EXCLUIR */}
-
-                  <Pressable
-                    style={
-                      styles.deleteButton
+                  <LinhaInfo
+                    icone="speedometer-outline"
+                    rotulo="Risco"
+                    valor={
+                      NOME_RISCO[
+                        ocorrencia.risco ?? riscoPorClasse(ocorrencia.classe)
+                      ]
                     }
-                    onPress={() =>
-                      confirmarExclusao(
-                        ocorrencia
-                      )
+                  />
+
+                  <LinhaInfo
+                    icone="location-outline"
+                    rotulo="Local"
+                    valor={ocorrencia.local}
+                  />
+
+                  <LinhaInfo
+                    icone="document-text-outline"
+                    rotulo="Descrição"
+                    valor={ocorrencia.descricao}
+                  />
+
+                  <LinhaInfo
+                    icone="pricetag-outline"
+                    rotulo="Zona"
+                    valor={ocorrencia.zona ? NOME_ZONA[ocorrencia.zona] : undefined}
+                  />
+
+                  <LinhaInfo
+                    icone="people-outline"
+                    rotulo="Equipe"
+                    valor={ocorrencia.equipe}
+                  />
+
+                  <LinhaInfo
+                    icone="car-outline"
+                    rotulo="Veículo"
+                    valor={ocorrencia.veiculo}
+                  />
+
+                  <LinhaInfo
+                    icone="person-outline"
+                    rotulo="Registrado por"
+                    valor={textoRegistradoPor(ocorrencia.criadoPor)}
+                  />
+
+                  <LinhaInfo
+                    icone="navigate-outline"
+                    rotulo="Latitude"
+                    valor={ocorrencia.latitude.toFixed(6)}
+                  />
+
+                  <LinhaInfo
+                    icone="navigate-outline"
+                    rotulo="Longitude"
+                    valor={ocorrencia.longitude.toFixed(6)}
+                  />
+
+                  <LinhaInfo
+                    icone="checkmark-done"
+                    rotulo="Poda concluída em"
+                    valor={
+                      ocorrencia.dataConclusao
+                        ? formatarDataHora(ocorrencia.dataConclusao)
+                        : undefined
                     }
-                  >
-
-                    <Text
-                      style={
-                        styles.deleteButtonText
-                      }
-                    >
-                      Excluir ocorrência
-                    </Text>
-
-                  </Pressable>
-
+                  />
                 </View>
 
-              )
-            )
-          )
-        }
 
-      </ScrollView>
+                {/* FOTO */}
 
-    </SafeAreaView>
+                {ocorrencia.imagem && (
+                  <Image
+                    source={{ uri: ocorrencia.imagem }}
+                    style={styles.foto}
+                    accessibilityLabel="Foto da vegetação"
+                  />
+                )}
+
+
+                {/* AÇÕES */}
+
+                {!concluida && (
+                  <Botao
+                    titulo="Marcar poda como concluída"
+                    icone="checkmark-done"
+                    tamanho="grande"
+                    carregando={concluindo === ocorrencia.id}
+                    onPress={() => concluirPoda(ocorrencia)}
+                    estilo={styles.botao}
+                  />
+                )}
+
+                {podeExcluir && (
+                  <Botao
+                    titulo="Excluir ocorrência"
+                    icone="trash-outline"
+                    variante="perigo"
+                    onPress={() => confirmarExclusao(ocorrencia)}
+                    estilo={styles.botao}
+                  />
+                )}
+              </Card>
+            );
+          })
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -1078,491 +571,150 @@ export default function TrechoDetalhesScreen() {
 // ESTILOS
 // ============================================================
 
-const styles =
-  StyleSheet.create({
-
-    container: {
-      flex:
-        1,
-
-      backgroundColor:
-        "#F4F7F4",
-    },
-
-
-    content: {
-      paddingBottom:
-        40,
-    },
-
-
-    header: {
-      backgroundColor:
-        "#164B2A",
-
-      paddingHorizontal:
-        20,
-
-      paddingTop:
-        20,
-
-      paddingBottom:
-        28,
-    },
-
-
-    backButton: {
-      alignSelf:
-        "flex-start",
-
-      marginBottom:
-        18,
-
-      paddingVertical:
-        8,
-
-      paddingHorizontal:
-        12,
-
-      backgroundColor:
-        "rgba(255,255,255,0.12)",
-
-      borderRadius:
-        10,
-    },
-
-
-    backButtonText: {
-      color:
-        "#FFFFFF",
-
-      fontSize:
-        15,
-
-      fontWeight:
-        "600",
-    },
-
-
-    title: {
-      color:
-        "#FFFFFF",
-
-      fontSize:
-        24,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    subtitle: {
-      marginTop:
-        5,
-
-      color:
-        "#D8E7DC",
-
-      fontSize:
-        14,
-    },
-
-
-    summaryRow: {
-      flexDirection:
-        "row",
-
-      paddingHorizontal:
-        20,
-
-      gap:
-        12,
-
-      marginTop:
-        22,
-    },
-
-
-    summaryCard: {
-      flex:
-        1,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      padding:
-        17,
-
-      borderRadius:
-        14,
-    },
-
-
-    summaryNumber: {
-      fontSize:
-        25,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#21894A",
-    },
-
-
-    criticalNumber: {
-      color:
-        "#D63E3E",
-    },
-
-
-    summaryLabel: {
-      marginTop:
-        3,
-
-      fontSize:
-        13,
-
-      color:
-        "#6B756E",
-    },
-
-
-    sectionTitle: {
-      marginHorizontal:
-        20,
-
-      marginTop:
-        24,
-
-      marginBottom:
-        12,
-
-      fontSize:
-        19,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-    },
-
-
-    card: {
-      marginHorizontal:
-        20,
-
-      marginBottom:
-        14,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      borderRadius:
-        16,
-
-      padding:
-        17,
-    },
-
-
-    cardTop: {
-      flexDirection:
-        "row",
-
-      justifyContent:
-        "space-between",
-
-      alignItems:
-        "flex-start",
-    },
-
-
-    km: {
-      fontSize:
-        18,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-    },
-
-
-    date: {
-      marginTop:
-        4,
-
-      fontSize:
-        12,
-
-      color:
-        "#6B756E",
-    },
-
-
-    badge: {
-      paddingHorizontal:
-        10,
-
-      paddingVertical:
-        7,
-
-      borderRadius:
-        20,
-    },
-
-
-    criticalBadge: {
-      backgroundColor:
-        "#D63E3E",
-    },
-
-
-    attentionBadge: {
-      backgroundColor:
-        "#E0A82E",
-    },
-
-
-    normalBadge: {
-      backgroundColor:
-        "#2E9D50",
-    },
-
-
-    badgeText: {
-      color:
-        "#FFFFFF",
-
-      fontSize:
-        11,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    detailsBox: {
-      marginTop:
-        15,
-
-      backgroundColor:
-        "#F7F9F7",
-
-      borderRadius:
-        12,
-
-      padding:
-        13,
-    },
-
-
-    detailRow: {
-      flexDirection:
-        "row",
-
-      justifyContent:
-        "space-between",
-
-      paddingVertical:
-        5,
-    },
-
-
-    detailLabel: {
-      color:
-        "#6B756E",
-
-      fontSize:
-        12,
-    },
-
-
-    detailValue: {
-      color:
-        "#1D2A21",
-
-      fontSize:
-        12,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    detailValueLong: {
-      flexShrink:
-        1,
-
-      marginLeft:
-        12,
-
-      textAlign:
-        "right",
-    },
-
-
-    contractAlert: {
-      marginTop:
-        12,
-
-      backgroundColor:
-        "#FDEAEA",
-
-      borderWidth:
-        1,
-
-      borderColor:
-        "#D63E3E",
-
-      borderRadius:
-        10,
-
-      padding:
-        12,
-    },
-
-
-    contractAlertText: {
-      color:
-        "#B42F2F",
-
-      fontSize:
-        13,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    concludeButton: {
-      marginTop:
-        16,
-
-      backgroundColor:
-        "#21894A",
-
-      borderRadius:
-        10,
-
-      paddingVertical:
-        12,
-
-      alignItems:
-        "center",
-    },
-
-
-    concludeButtonText: {
-      color:
-        "#FFFFFF",
-
-      fontSize:
-        14,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    image: {
-      width:
-        "100%",
-
-      height:
-        180,
-
-      marginTop:
-        14,
-
-      borderRadius:
-        12,
-    },
-
-
-    deleteButton: {
-      marginTop:
-        16,
-
-      borderWidth:
-        1,
-
-      borderColor:
-        "#D63E3E",
-
-      backgroundColor:
-        "#FFF5F5",
-
-      borderRadius:
-        10,
-
-      paddingVertical:
-        12,
-
-      alignItems:
-        "center",
-    },
-
-
-    deleteButtonText: {
-      color:
-        "#C73232",
-
-      fontSize:
-        14,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    emptyCard: {
-      marginHorizontal:
-        20,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      padding:
-        24,
-
-      borderRadius:
-        14,
-
-      alignItems:
-        "center",
-    },
-
-
-    emptyTitle: {
-      fontSize:
-        16,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-    },
-
-
-    emptyText: {
-      marginTop:
-        6,
-
-      color:
-        "#6B756E",
-
-      fontSize:
-        13,
-
-      textAlign:
-        "center",
-    },
-
-  });
-
-  
+const styles = StyleSheet.create({
+  tela: {
+    flex: 1,
+    backgroundColor: cores.fundo,
+  },
+
+  corpo: {
+    paddingHorizontal: espaco.xl,
+    paddingTop: espaco.xl,
+  },
+
+  flex: {
+    flex: 1,
+  },
+
+  linhaResumo: {
+    flexDirection: "row",
+    gap: espaco.md,
+    marginBottom: espaco.lg,
+  },
+
+  cardResumo: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: espaco.md,
+  },
+
+  valorResumo: {
+    ...tipografia.numero,
+    fontSize: 26,
+  },
+
+  rotuloResumo: {
+    ...tipografia.rotulo,
+    color: cores.textoSecundario,
+  },
+
+  card: {
+    marginBottom: espaco.lg,
+  },
+
+  topo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: espaco.md,
+  },
+
+  km: {
+    ...tipografia.tituloGrande,
+    color: cores.texto,
+  },
+
+  data: {
+    ...tipografia.rotulo,
+    color: cores.textoSecundario,
+    marginTop: 2,
+  },
+
+  status: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: espaco.xs + 2,
+    marginTop: espaco.md,
+    paddingHorizontal: espaco.md,
+    paddingVertical: espaco.xs + 2,
+    borderRadius: raio.pilula,
+  },
+
+  statusAberto: {
+    backgroundColor: cores.avisoFundo,
+  },
+
+  statusConcluido: {
+    backgroundColor: cores.sucessoFundo,
+  },
+
+  statusTexto: {
+    ...tipografia.rotulo,
+    fontWeight: "800",
+  },
+
+  alertaContrato: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.sm,
+    marginTop: espaco.md,
+    backgroundColor: cores.perigoFundo,
+    borderWidth: 1.5,
+    borderColor: cores.risco.CRITICO.cor,
+    borderRadius: raio.md,
+    padding: espaco.md,
+  },
+
+  alertaContratoTexto: {
+    ...tipografia.corpoForte,
+    color: cores.perigo,
+    flex: 1,
+  },
+
+  infos: {
+    marginTop: espaco.lg,
+    backgroundColor: cores.superficieSuave,
+    borderRadius: raio.md,
+    paddingHorizontal: espaco.md,
+    paddingVertical: espaco.xs,
+  },
+
+  linhaInfo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: espaco.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: cores.borda,
+  },
+
+  linhaIcone: {
+    marginRight: espaco.sm,
+    marginTop: 1,
+  },
+
+  linhaRotulo: {
+    ...tipografia.rotulo,
+    color: cores.textoSecundario,
+    width: 112,
+  },
+
+  linhaValor: {
+    ...tipografia.rotulo,
+    color: cores.texto,
+    fontWeight: "700",
+    flex: 1,
+    textAlign: "right",
+  },
+
+  foto: {
+    width: "100%",
+    height: 200,
+    marginTop: espaco.lg,
+    borderRadius: raio.md,
+    backgroundColor: cores.superficieSuave,
+  },
+
+  botao: {
+    marginTop: espaco.md,
+  },
+});

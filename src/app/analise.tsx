@@ -2,9 +2,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  View,
 } from "react-native";
 
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AnaliseHeader from "../components/analise/AnaliseHeader";
 import BotoesAcao from "../components/analise/BotoesAcao";
@@ -18,6 +19,8 @@ import { styles } from "../components/analise/styles";
 
 import { useAnalise } from "../hooks/useAnalise";
 
+import { espaco } from "../theme";
+
 
 // ============================================================
 // NOVA ANÁLISE
@@ -26,19 +29,24 @@ import { useAnalise } from "../hooks/useAnalise";
 // ============================================================
 
 export default function AnaliseScreen() {
+  const insets = useSafeAreaInsets();
+
   const analise = useAnalise();
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <KeyboardAvoidingView
+      style={styles.tela}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + espaco.xxxl,
+        }}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
-          <AnaliseHeader analise={analise} />
+        <AnaliseHeader analise={analise} />
+
+        <View style={styles.corpo}>
           <SecaoFoto analise={analise} />
           <SecaoTrecho analise={analise} />
           <SecaoLocalizacao analise={analise} />
@@ -46,8 +54,8 @@ export default function AnaliseScreen() {
           <ClassificacaoManual analise={analise} />
           <SecaoRegistro analise={analise} />
           <BotoesAcao analise={analise} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

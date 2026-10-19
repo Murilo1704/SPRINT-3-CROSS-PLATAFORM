@@ -4,61 +4,52 @@ import {
   useSegments,
 } from "expo-router";
 
+import { StatusBar } from "expo-status-bar";
+
 import {
   useEffect,
-  useState,
+  useRef,
 } from "react";
 
-import {
-  ActivityIndicator,
-  StyleSheet,
-  View,
-} from "react-native";
+import Carregando from "../components/ui/Carregando";
 
 import {
-  carregarUsuarioLogado,
-} from "../services/auth";
+  SessaoProvider,
+  useSessao,
+} from "../hooks/useSessao";
+
+import { ehGestor } from "../services/auth";
+
+import { cores } from "../theme";
+
+import { mostrarMensagem } from "../utils/mensagem";
 
 
+// Rotas que só o gestor pode abrir.
+// Exportar CSV fica dentro de "prioridades".
+const ROTAS_DO_GESTOR = [
+  "prioridades",
+];
+
+
+// O expo-router já envolve o app em um SafeAreaProvider.
 export default function RootLayout() {
-  const segments =
-    useSegments();
-
-  const [
-    verificando,
-    setVerificando,
-  ] =
-    useState(true);
-
-  const [
-    autenticado,
-    setAutenticado,
-  ] =
-    useState(false);
+  return (
+    <SessaoProvider>
+      <StatusBar style="light" />
+      <Navegacao />
+    </SessaoProvider>
+  );
+}
 
 
-  // =========================================================
-  // VERIFICAR LOGIN
-  // =========================================================
+function Navegacao() {
+  const segments = useSegments();
 
-  useEffect(() => {
-    async function verificarLogin() {
-      const usuario =
-        await carregarUsuarioLogado();
+  const { usuario, carregando } = useSessao();
 
-      setAutenticado(
-        usuario !== null
-      );
-
-      setVerificando(
-        false
-      );
-    }
-
-    verificarLogin();
-  }, [
-    segments,
-  ]);
+  // Evita mostrar o aviso duas vezes durante o redirecionamento.
+  const avisoMostrado = useRef(false);
 
 
   // =========================================================
@@ -66,123 +57,76 @@ export default function RootLayout() {
   // =========================================================
 
   useEffect(() => {
-    if (
-      verificando
-    ) {
+    if (carregando) {
       return;
     }
+
+    const rota: string =
+      segments[0] ?? "";
 
     const estaNoLogin =
-      segments[0] ===
-      "login";
-
+      rota === "login";
 
     // Não autenticado
-    if (
-      !autenticado &&
-      !estaNoLogin
-    ) {
-      router.replace(
-        "/login"
-      );
-
+    if (!usuario && !estaNoLogin) {
+      router.replace("/login");
       return;
     }
 
-
     // Já autenticado e tentou abrir login
-    if (
-      autenticado &&
-      estaNoLogin
-    ) {
-      router.replace(
-        "/"
-      );
+    if (usuario && estaNoLogin) {
+      router.replace("/");
+      return;
     }
 
+    // Operador tentando abrir tela do gestor
+    if (
+      usuario &&
+      ROTAS_DO_GESTOR.includes(rota) &&
+      !ehGestor(usuario)
+    ) {
+      if (!avisoMostrado.current) {
+        avisoMostrado.current = true;
+
+        mostrarMensagem(
+          "Acesso restrito",
+          "Pontos prioritários e exportação CSV são exclusivos do gestor."
+        );
+      }
+
+      router.replace("/");
+      return;
+    }
+
+    avisoMostrado.current = false;
+
   }, [
-    autenticado,
-    verificando,
+    usuario,
+    carregando,
     segments,
   ]);
 
 
-  // =========================================================
-  // CARREGAMENTO
-  // =========================================================
-
-  if (
-    verificando
-  ) {
-    return (
-      <View
-        style={
-          styles.loading
-        }
-      >
-        <ActivityIndicator
-          size="large"
-          color="#21894A"
-        />
-      </View>
-    );
+  if (carregando) {
+    return <Carregando telaCheia />;
   }
 
-
-  // =========================================================
-  // TELAS DO APP
-  // =========================================================
 
   return (
     <Stack
       screenOptions={{
-        headerShown:
-          false,
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: cores.fundo,
+        },
       }}
     >
-      <Stack.Screen
-        name="login"
-      />
-
-      <Stack.Screen
-        name="index"
-      />
-
-      <Stack.Screen
-        name="analise"
-      />
-
-      <Stack.Screen
-        name="prioridades"
-      />
-
-     <Stack.Screen
-        name="rodovias"
-    />
-
-      <Stack.Screen
-        name="trecho-detalhes"
-      />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="analise" />
+      <Stack.Screen name="prioridades" />
+      <Stack.Screen name="rodovias" />
+      <Stack.Screen name="trecho-detalhes" />
     </Stack>
   );
 }
-
-
-const styles =
-  StyleSheet.create({
-
-    loading: {
-      flex: 1,
-
-      alignItems:
-        "center",
-
-      justifyContent:
-        "center",
-
-      backgroundColor:
-        "#F4F7F4",
-    },
-
-  });
-

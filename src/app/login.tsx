@@ -1,54 +1,104 @@
-import {
-  router,
-} from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import {
+  useEffect,
+  useRef,
   useState,
 } from "react";
 
 import {
-  ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import Botao from "../components/ui/Botao";
+import Campo from "../components/ui/Campo";
+
+import { useSessao } from "../hooks/useSessao";
 
 import {
   fazerLogin,
+  obterBloqueioLogin,
 } from "../services/auth";
+
+import {
+  cores,
+  espaco,
+  raio,
+  sombra,
+  tipografia,
+} from "../theme";
+
+import { mostrarMensagem } from "../utils/mensagem";
+
+
+function formatarContagem(
+  milissegundos: number
+) {
+  const totalSegundos =
+    Math.max(0, Math.ceil(milissegundos / 1000));
+
+  const minutos = Math.floor(totalSegundos / 60);
+  const segundos = String(totalSegundos % 60).padStart(2, "0");
+
+  return `${minutos}:${segundos}`;
+}
 
 
 export default function LoginScreen() {
-  const [
-    usuario,
-    setUsuario,
-  ] =
-    useState("");
+  const insets = useSafeAreaInsets();
 
-  const [
-    senha,
-    setSenha,
-  ] =
-    useState("");
+  const { definirUsuario } = useSessao();
 
-  const [
-    carregando,
-    setCarregando,
-  ] =
-    useState(false);
+  const campoSenha = useRef<TextInput>(null);
 
-  const [
-    erro,
-    setErro,
-  ] =
-    useState("");
+  const [usuario, setUsuario] = useState("");
+  const [senha, setSenha] = useState("");
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  // Timestamp até quando o login está bloqueado
+  const [bloqueadoAte, setBloqueadoAte] =
+    useState<number | null>(null);
+
+  const [agora, setAgora] = useState(Date.now());
+
+
+  // =========================================================
+  // BLOQUEIO (5 tentativas erradas → 1 minuto)
+  // =========================================================
+
+  useEffect(() => {
+    obterBloqueioLogin().then(setBloqueadoAte);
+  }, []);
+
+  useEffect(() => {
+    if (!bloqueadoAte) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      const instante = Date.now();
+      setAgora(instante);
+
+      if (instante >= bloqueadoAte) {
+        setBloqueadoAte(null);
+        setErro("");
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [bloqueadoAte]);
+
+  const bloqueado =
+    bloqueadoAte !== null && bloqueadoAte > agora;
 
 
   // =========================================================
@@ -56,554 +106,344 @@ export default function LoginScreen() {
   // =========================================================
 
   async function entrar() {
-    if (
-      !usuario.trim() ||
-      !senha
-    ) {
-      setErro(
-        "Informe o usuário e a senha."
-      );
-
+    if (bloqueado || carregando) {
       return;
     }
 
+    if (!usuario.trim() || !senha) {
+      setErro("Informe o usuário e a senha.");
+      return;
+    }
 
     try {
-      setCarregando(
-        true
-      );
-
-      setErro(
-        ""
-      );
-
+      setCarregando(true);
+      setErro("");
 
       const resultado =
-        await fazerLogin(
-          usuario,
-          senha
-        );
+        await fazerLogin(usuario, senha);
 
-
-      if (!resultado) {
-        setErro(
-          "Usuário ou senha incorretos."
-        );
-
+      if (!resultado.sucesso) {
+        setErro(resultado.mensagem);
+        setSenha("");
+        setAgora(Date.now());
+        setBloqueadoAte(resultado.bloqueadoAte);
         return;
       }
 
-
-      router.replace(
-        "/"
-      );
+      // O _layout.tsx leva para a Home ao detectar o usuário.
+      definirUsuario(resultado.usuario);
 
     } catch (error) {
-      console.error(
-        error
+      console.error(error);
+
+      mostrarMensagem(
+        "Erro",
+        "Não foi possível realizar o login."
       );
-
-
-      if (
-        Platform.OS ===
-        "web"
-      ) {
-        alert(
-          "Não foi possível realizar o login."
-        );
-
-      } else {
-        Alert.alert(
-          "Erro",
-          "Não foi possível realizar o login."
-        );
-      }
 
     } finally {
-      setCarregando(
-        false
-      );
+      setCarregando(false);
     }
   }
 
 
   return (
-    <SafeAreaView
-      style={
-        styles.container
-      }
-    >
+    <View style={styles.tela}>
+      <View style={styles.circuloTopo} />
+      <View style={styles.circuloBase} />
+
       <KeyboardAvoidingView
-        style={
-          styles.keyboardContainer
-        }
-        behavior={
-          Platform.OS === "ios"
-            ? "padding"
-            : undefined
-        }
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-
-        <View
-          style={
-            styles.backgroundCircleTop
-          }
-        />
-
-        <View
-          style={
-            styles.backgroundCircleBottom
-          }
-        />
-
-
-        <View
-          style={
-            styles.card
-          }
+        <ScrollView
+          contentContainerStyle={[
+            styles.conteudo,
+            {
+              paddingTop: insets.top + espaco.xxl,
+              paddingBottom: insets.bottom + espaco.xxl,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
 
-          <View
-            style={
-              styles.logoBox
-            }
-          >
-            <Text
-              style={
-                styles.logoLetter
-              }
-            >
-              V
-            </Text>
-          </View>
+          {/* MARCA */}
 
-
-          <Text
-            style={
-              styles.title
-            }
-          >
-            VERDESCAN
-          </Text>
-
-
-          <Text
-            style={
-              styles.subtitle
-            }
-          >
-            Monitoramento inteligente
-            de vegetação
-          </Text>
-
-
-          <View
-            style={
-              styles.divider
-            }
-          />
-
-
-          {/* USUÁRIO */}
-
-          <Text
-            style={
-              styles.label
-            }
-          >
-            Usuário
-          </Text>
-
-
-          <TextInput
-            style={
-              styles.input
-            }
-            value={
-              usuario
-            }
-            onChangeText={(
-              texto
-            ) => {
-              setUsuario(
-                texto
-              );
-
-              setErro(
-                ""
-              );
-            }}
-            placeholder=
-              "Digite seu usuário"
-            placeholderTextColor=
-              "#8C9990"
-            autoCapitalize=
-              "none"
-            autoCorrect={
-              false
-            }
-            editable={
-              !carregando
-            }
-          />
-
-
-          {/* SENHA */}
-
-          <Text
-            style={[
-              styles.label,
-              styles.secondLabel,
-            ]}
-          >
-            Senha
-          </Text>
-
-
-          <TextInput
-            style={
-              styles.input
-            }
-            value={
-              senha
-            }
-            onChangeText={(
-              texto
-            ) => {
-              setSenha(
-                texto
-              );
-
-              setErro(
-                ""
-              );
-            }}
-            placeholder=
-              "Digite sua senha"
-            placeholderTextColor=
-              "#8C9990"
-            secureTextEntry
-            autoCapitalize=
-              "none"
-            autoCorrect={
-              false
-            }
-            editable={
-              !carregando
-            }
-            onSubmitEditing={
-              entrar
-            }
-          />
-
-
-          {/* CREDENCIAIS DE DEMONSTRAÇÃO */}
-
-          <View
-            style={
-              styles.demoBox
-            }
-          >
-            <Text
-              style={
-                styles.demoTitle
-              }
-            >
-              Acesso de demonstração
-            </Text>
-
-            <Text
-              style={
-                styles.demoText
-              }
-            >
-              Usuário: master
-            </Text>
-
-            <Text
-              style={
-                styles.demoText
-              }
-            >
-              Senha: verdescan2026
-            </Text>
-          </View>
-
-
-          {erro.length > 0 && (
-            <View
-              style={
-                styles.errorBox
-              }
-            >
-              <Text
-                style={
-                  styles.errorText
-                }
-              >
-                {erro}
-              </Text>
-            </View>
-          )}
-
-
-          <TouchableOpacity
-            style={[
-              styles.loginButton,
-
-              carregando &&
-                styles.loginButtonDisabled,
-            ]}
-            onPress={
-              entrar
-            }
-            disabled={
-              carregando
-            }
-          >
-            {carregando ? (
-              <ActivityIndicator
-                color="#FFFFFF"
+          <View style={styles.marca}>
+            <View style={styles.logo}>
+              <Ionicons
+                name="leaf"
+                size={40}
+                color={cores.sobrePrimaria}
               />
+            </View>
 
-            ) : (
-              <Text
-                style={
-                  styles.loginButtonText
-                }
+            <Text
+              style={styles.nomeApp}
+              accessibilityRole="header"
+            >
+              VerdeScan
+            </Text>
+
+            <Text style={styles.slogan}>
+              Monitoramento inteligente de vegetação
+            </Text>
+          </View>
+
+
+          {/* FORMULÁRIO */}
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitulo}>
+              Entrar
+            </Text>
+
+            <Text style={styles.cardTexto}>
+              Use o usuário e a senha fornecidos pela Motiva.
+            </Text>
+
+            <Campo
+              rotulo="Usuário"
+              icone="person-outline"
+              value={usuario}
+              onChangeText={(texto) => {
+                setUsuario(texto);
+                setErro("");
+              }}
+              placeholder="Digite seu usuário"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="username"
+              textContentType="username"
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => campoSenha.current?.focus()}
+              editable={!carregando}
+            />
+
+            <Campo
+              ref={campoSenha}
+              rotulo="Senha"
+              icone="lock-closed-outline"
+              senha
+              value={senha}
+              onChangeText={(texto) => {
+                setSenha(texto);
+                setErro("");
+              }}
+              placeholder="Digite sua senha"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="password"
+              textContentType="password"
+              returnKeyType="go"
+              onSubmitEditing={entrar}
+              editable={!carregando}
+            />
+
+            {bloqueado ? (
+              <View
+                style={[styles.aviso, styles.avisoBloqueio]}
+                accessibilityLiveRegion="polite"
               >
-                Entrar
-              </Text>
+                <Ionicons
+                  name="time-outline"
+                  size={22}
+                  color={cores.aviso}
+                />
+
+                <Text style={[styles.avisoTexto, { color: cores.aviso }]}>
+                  Muitas tentativas incorretas. Tente novamente em{" "}
+                  <Text style={styles.contagem}>
+                    {formatarContagem((bloqueadoAte ?? 0) - agora)}
+                  </Text>
+                  .
+                </Text>
+              </View>
+            ) : (
+              erro.length > 0 && (
+                <View
+                  style={[styles.aviso, styles.avisoErro]}
+                  accessibilityLiveRegion="polite"
+                >
+                  <Ionicons
+                    name="alert-circle"
+                    size={22}
+                    color={cores.perigo}
+                  />
+
+                  <Text style={[styles.avisoTexto, { color: cores.perigo }]}>
+                    {erro}
+                  </Text>
+                </View>
+              )
             )}
-          </TouchableOpacity>
 
+            <Botao
+              titulo={
+                bloqueado
+                  ? `Aguarde ${formatarContagem((bloqueadoAte ?? 0) - agora)}`
+                  : "Entrar"
+              }
+              icone={bloqueado ? "lock-closed" : "log-in-outline"}
+              tamanho="grande"
+              carregando={carregando}
+              desabilitado={bloqueado}
+              onPress={entrar}
+              estilo={styles.botaoEntrar}
+            />
+          </View>
 
-          <Text
-            style={
-              styles.footerText
-            }
-          >
-            Acesso destinado aos
-            operadores do sistema
-          </Text>
+          <View style={styles.rodape}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={16}
+              color={cores.textoSobreEscuroSuave}
+            />
 
-        </View>
+            <Text style={styles.rodapeTexto}>
+              Acesso restrito a operadores e gestores da Motiva
+            </Text>
+          </View>
 
+        </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 
-const styles =
-  StyleSheet.create({
+const styles = StyleSheet.create({
+  tela: {
+    flex: 1,
+    backgroundColor: cores.primariaEscura,
+    overflow: "hidden",
+  },
 
-    container: {
-      flex: 1,
-      backgroundColor:
-        "#0A4B2C",
-    },
+  flex: {
+    flex: 1,
+  },
 
-    keyboardContainer: {
-      flex: 1,
-      justifyContent:
-        "center",
-      paddingHorizontal: 22,
-      overflow:
-        "hidden",
-    },
+  circuloTopo: {
+    position: "absolute",
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    top: -140,
+    right: -110,
+  },
 
-    backgroundCircleTop: {
-      position:
-        "absolute",
-      width: 320,
-      height: 320,
-      borderRadius: 160,
-      backgroundColor:
-        "rgba(255,255,255,0.05)",
-      top: -150,
-      right: -100,
-    },
+  circuloBase: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(83,190,120,0.16)",
+    bottom: -110,
+    left: -90,
+  },
 
-    backgroundCircleBottom: {
-      position:
-        "absolute",
-      width: 240,
-      height: 240,
-      borderRadius: 120,
-      backgroundColor:
-        "rgba(83,190,120,0.18)",
-      bottom: -100,
-      left: -80,
-    },
+  conteudo: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: espaco.xl,
+  },
 
-    card: {
-      width:
-        "100%",
-      maxWidth: 460,
-      alignSelf:
-        "center",
-      backgroundColor:
-        "#FFFFFF",
-      borderRadius: 24,
-      paddingHorizontal: 26,
-      paddingVertical: 32,
-    },
+  marca: {
+    alignItems: "center",
+    marginBottom: espaco.xxl,
+  },
 
-    logoBox: {
-      width: 72,
-      height: 72,
-      borderRadius: 22,
-      alignSelf:
-        "center",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      backgroundColor:
-        "#21894A",
-      marginBottom: 18,
-    },
+  logo: {
+    width: 76,
+    height: 76,
+    borderRadius: raio.xl,
+    backgroundColor: cores.primaria,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: espaco.md,
+    ...sombra.destaque,
+  },
 
-    logoLetter: {
-      color:
-        "#FFFFFF",
-      fontSize: 34,
-      fontWeight:
-        "900",
-    },
+  nomeApp: {
+    ...tipografia.tituloGrande,
+    fontSize: 32,
+    lineHeight: 38,
+    color: cores.textoSobreEscuro,
+  },
 
-    title: {
-      fontSize: 29,
-      fontWeight:
-        "900",
-      color:
-        "#163021",
-      textAlign:
-        "center",
-    },
+  slogan: {
+    ...tipografia.corpo,
+    color: cores.textoSobreEscuroSuave,
+    marginTop: espaco.xs,
+    textAlign: "center",
+  },
 
-    subtitle: {
-      marginTop: 6,
-      color:
-        "#6B786F",
-      fontSize: 14,
-      textAlign:
-        "center",
-    },
+  card: {
+    width: "100%",
+    maxWidth: 460,
+    alignSelf: "center",
+    backgroundColor: cores.superficie,
+    borderRadius: raio.xl,
+    padding: espaco.xxl,
+    ...sombra.card,
+  },
 
-    divider: {
-      height: 1,
-      backgroundColor:
-        "#E6ECE8",
-      marginVertical: 25,
-    },
+  cardTitulo: {
+    ...tipografia.titulo,
+    color: cores.texto,
+  },
 
-    label: {
-      color:
-        "#34483B",
-      fontSize: 13,
-      fontWeight:
-        "700",
-      marginBottom: 7,
-    },
+  cardTexto: {
+    ...tipografia.corpo,
+    color: cores.textoSecundario,
+    marginTop: espaco.xs,
+    marginBottom: espaco.xl,
+  },
 
-    secondLabel: {
-      marginTop: 17,
-    },
+  aviso: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.sm,
+    borderRadius: raio.md,
+    padding: espaco.md,
+    marginBottom: espaco.lg,
+  },
 
-    input: {
-      width:
-        "100%",
-      borderWidth: 1,
-      borderColor:
-        "#D4E0D8",
-      backgroundColor:
-        "#F8FAF8",
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 14,
-      fontSize: 15,
-      color:
-        "#163021",
-    },
+  avisoErro: {
+    backgroundColor: cores.perigoFundo,
+  },
 
-    demoBox: {
-      marginTop: 18,
-      backgroundColor:
-        "#F1F8F3",
-      borderWidth: 1,
-      borderColor:
-        "#CFE4D5",
-      borderRadius: 12,
-      padding: 14,
-    },
+  avisoBloqueio: {
+    backgroundColor: cores.avisoFundo,
+  },
 
-    demoTitle: {
-      color:
-        "#196B3B",
-      fontSize: 12,
-      fontWeight:
-        "bold",
-      marginBottom: 6,
-    },
+  avisoTexto: {
+    ...tipografia.rotulo,
+    flex: 1,
+  },
 
-    demoText: {
-      color:
-        "#526157",
-      fontSize: 13,
-      marginTop: 2,
-    },
+  contagem: {
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
 
-    errorBox: {
-      marginTop: 16,
-      backgroundColor:
-        "#FDECEC",
-      borderRadius: 10,
-      padding: 12,
-    },
+  botaoEntrar: {
+    marginTop: espaco.xs,
+  },
 
-    errorText: {
-      color:
-        "#B63232",
-      fontSize: 13,
-      fontWeight:
-        "600",
-      textAlign:
-        "center",
-    },
+  rodape: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: espaco.xs + 2,
+    marginTop: espaco.xxl,
+  },
 
-    loginButton: {
-      marginTop: 24,
-      backgroundColor:
-        "#21894A",
-      paddingVertical: 15,
-      borderRadius: 13,
-      alignItems:
-        "center",
-    },
-
-    loginButtonDisabled: {
-      opacity: 0.65,
-    },
-
-    loginButtonText: {
-      color:
-        "#FFFFFF",
-      fontSize: 16,
-      fontWeight:
-        "bold",
-    },
-
-    footerText: {
-      marginTop: 20,
-      fontSize: 11,
-      color:
-        "#8B968E",
-      textAlign:
-        "center",
-    },
-
-  });
-
-  
+  rodapeTexto: {
+    ...tipografia.pequeno,
+    color: cores.textoSobreEscuroSuave,
+  },
+});

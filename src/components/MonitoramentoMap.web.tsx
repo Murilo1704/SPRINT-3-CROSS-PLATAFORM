@@ -1,98 +1,63 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import {
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
+import {
+  cores,
+  espaco,
+  raio,
+  tipografia,
+} from "../theme";
+
+
+// No navegador o react-native-maps não funciona:
+// mostramos só um aviso (a legenda fica na Home).
 export default function MonitoramentoMap() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>
+      <Ionicons
+        name="map-outline"
+        size={40}
+        color={cores.primaria}
+      />
+
+      <Text style={styles.titulo}>
         Mapa VerdeScan
       </Text>
 
-      <Text style={styles.description}>
+      <Text style={styles.descricao}>
         O mapa interativo com os pontos das análises está disponível
         no aplicativo mobile.
       </Text>
-
-      <View style={styles.points}>
-        <View style={styles.pointItem}>
-          <View style={[styles.point, styles.green]} />
-          <Text style={styles.label}>Normal</Text>
-        </View>
-
-        <View style={styles.pointItem}>
-          <View style={[styles.point, styles.yellow]} />
-          <Text style={styles.label}>Atenção</Text>
-        </View>
-
-        <View style={styles.pointItem}>
-          <View style={[styles.point, styles.red]} />
-          <Text style={styles.label}>Crítico</Text>
-        </View>
-      </View>
     </View>
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
-    height: 280,
-    borderRadius: 16,
-    backgroundColor: "#DDE9DF",
+    height: 240,
+    borderRadius: raio.lg,
+    backgroundColor: cores.primariaClara,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: espaco.xxl,
+    gap: espaco.sm,
   },
 
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#164B2A",
+  titulo: {
+    ...tipografia.secao,
+    color: cores.primariaEscura,
   },
 
-  description: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#526157",
+  descricao: {
+    ...tipografia.corpo,
+    color: cores.textoSecundario,
     textAlign: "center",
-    lineHeight: 20,
     maxWidth: 420,
   },
-
-  points: {
-    flexDirection: "row",
-    gap: 28,
-    marginTop: 26,
-  },
-
-  pointItem: {
-    alignItems: "center",
-  },
-
-  point: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-
-  green: {
-    backgroundColor: "#2E9D50",
-  },
-
-  yellow: {
-    backgroundColor: "#E0A82E",
-  },
-
-  red: {
-    backgroundColor: "#D63E3E",
-  },
-
-  label: {
-    marginTop: 6,
-    color: "#526157",
-    fontSize: 12,
-  },
 });
-

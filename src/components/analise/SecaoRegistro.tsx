@@ -1,13 +1,14 @@
 import {
-  Text,
-  TextInput,
   View,
 } from "react-native";
 
 import { AnaliseState } from "../../hooks/useAnalise";
 
-import { extraStyles } from "./extraStyles";
+import Campo from "../ui/Campo";
+import Card from "../ui/Card";
+
 import { styles } from "./styles";
+import TituloPasso from "./TituloPasso";
 
 
 type Props = {
@@ -32,64 +33,54 @@ export default function SecaoRegistro({ analise }: Props) {
   } = analise;
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        5. Detalhes do registro
-      </Text>
+    <View style={styles.secao}>
+      <TituloPasso
+        numero={5}
+        titulo="Detalhes do registro"
+        opcional
+        concluido={local.trim().length > 0 || descricao.trim().length > 0}
+      />
 
-      <View style={[styles.card, styles.formCard]}>
-        <Text style={styles.inputLabel}>
-          Local
-        </Text>
-
-        <TextInput
-          style={styles.input}
+      <Card>
+        <Campo
+          rotulo="Local"
+          icone="location-outline"
           value={local}
           onChangeText={setLocal}
           placeholder="Ex.: Acostamento sentido capital"
-          placeholderTextColor="#9AA39C"
         />
 
-        <Text style={[styles.inputLabel, styles.secondInputLabel]}>
-          Descrição
-        </Text>
-
-        <TextInput
-          style={[styles.input, extraStyles.multilineInput]}
+        <Campo
+          rotulo="Descrição"
+          icone="document-text-outline"
           value={descricao}
           onChangeText={setDescricao}
           placeholder="Ex.: Capim alto cobrindo a placa de velocidade"
-          placeholderTextColor="#9AA39C"
           multiline
         />
 
-        <Text style={[styles.inputLabel, styles.secondInputLabel]}>
-          Equipe
-        </Text>
+        <View style={styles.linha}>
+          <Campo
+            rotulo="Equipe"
+            icone="people-outline"
+            value={equipe}
+            onChangeText={setEquipe}
+            placeholder="Ex.: Equipe 03"
+            estiloContainer={styles.colunaFlex}
+          />
 
-        <TextInput
-          style={styles.input}
-          value={equipe}
-          onChangeText={setEquipe}
-          placeholder="Ex.: Equipe Campinas 02"
-          placeholderTextColor="#9AA39C"
-        />
-
-        <Text style={[styles.inputLabel, styles.secondInputLabel]}>
-          Veículo (placa)
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          value={veiculo}
-          onChangeText={setVeiculo}
-          placeholder="Ex.: ABC1D23"
-          placeholderTextColor="#9AA39C"
-          autoCapitalize="characters"
-          autoCorrect={false}
-        />
-
-      </View>
+          <Campo
+            rotulo="Veículo (placa)"
+            icone="car-outline"
+            value={veiculo}
+            onChangeText={setVeiculo}
+            placeholder="ABC1D23"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            estiloContainer={styles.colunaFlex}
+          />
+        </View>
+      </Card>
     </View>
   );
 }

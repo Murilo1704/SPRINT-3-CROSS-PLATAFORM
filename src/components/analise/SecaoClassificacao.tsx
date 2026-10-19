@@ -1,17 +1,34 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import {
-  ActivityIndicator,
   Text,
   View,
 } from "react-native";
 
+import { FAIXA_CLASSE } from "../../constants/risco";
+
 import { AnaliseState } from "../../hooks/useAnalise";
 
+import { cores } from "../../theme";
+
+import BadgeRisco from "../ui/BadgeRisco";
+import Card from "../ui/Card";
+import Carregando from "../ui/Carregando";
+
 import { styles } from "./styles";
+import TituloPasso from "./TituloPasso";
 
 
 type Props = {
   analise: AnaliseState;
 };
+
+
+const REGRAS = [
+  { classe: "NORMAL", nome: "Normal" },
+  { classe: "ATENCAO", nome: "Atenção" },
+  { classe: "CRITICO", nome: "Crítico" },
+] as const;
 
 
 // ============================================================
@@ -22,66 +39,44 @@ export default function SecaoClassificacao({ analise }: Props) {
   const {
     analisando,
     resultado,
+    podeSalvar,
   } = analise;
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        4. Classificação
-      </Text>
+    <View style={styles.secao}>
+      <TituloPasso
+        numero={4}
+        titulo="Classificação"
+        concluido={podeSalvar}
+      />
 
-      <View style={styles.card}>
+      <Card>
         {analisando ? (
-          <>
-            <ActivityIndicator
-              size="large"
-              color="#21894A"
-            />
-
-            <Text style={styles.cardTitle}>
-              Analisando imagem...
-            </Text>
-          </>
+          <Carregando texto={"Analisando imagem...\nIsso pode levar alguns segundos."} />
         ) : resultado ? (
-          <>
-            <Text style={styles.resultLabel}>
+          <View style={styles.resultadoCentro}>
+            <Text style={styles.resultadoRotulo}>
               Resultado
             </Text>
 
-            <View
-              style={[
-                styles.resultBadge,
-                resultado.classe === "CRITICO"
-                  ? styles.resultCritical
-                  : resultado.classe === "ATENCAO"
-                    ? styles.resultAttention
-                    : resultado.classe === "NORMAL"
-                      ? styles.resultNormal
-                      : styles.resultInconclusive,
-              ]}
-            >
-              <Text style={styles.resultBadgeText}>
-                {resultado.classe === "CRITICO"
-                  ? "CRÍTICO"
-                  : resultado.classe === "ATENCAO"
-                    ? "ATENÇÃO"
-                    : resultado.classe}
-              </Text>
-            </View>
+            <BadgeRisco
+              classe={resultado.classe}
+              tamanho="grande"
+            />
 
             {resultado.manual ? (
-              <Text style={styles.confidence}>
+              <Text style={styles.confianca}>
                 Classificado manualmente pelo operador (sem IA)
               </Text>
             ) : (
               resultado.classe !== "INCONCLUSIVO" && (
                 <>
-                  <Text style={styles.confidence}>
+                  <Text style={styles.confianca}>
                     Confiança da decisão:{" "}
                     {resultado.confiancaPercentual.toFixed(2)}%
                   </Text>
 
-                  <Text style={styles.confidenceLevel}>
+                  <Text style={styles.nivelConfianca}>
                     Nível de confiança: {resultado.nivelConfianca}
                   </Text>
                 </>
@@ -89,40 +84,64 @@ export default function SecaoClassificacao({ analise }: Props) {
             )}
 
             {resultado.revisaoRecomendada && (
-              <View style={styles.reviewBox}>
-                <Text style={styles.reviewTitle}>
-                  ⚠ Revisão recomendada
-                </Text>
+              <View
+                style={styles.caixaRevisao}
+                accessibilityRole="alert"
+              >
+                <Ionicons
+                  name="warning"
+                  size={22}
+                  color={cores.aviso}
+                />
 
-                <Text style={styles.reviewText}>
-                  {resultado.motivoRevisao ??
-                    "O resultado deve ser conferido pelo operador."}
-                </Text>
+                <View style={styles.colunaFlex}>
+                  <Text style={styles.caixaRevisaoTitulo}>
+                    Revisão recomendada
+                  </Text>
+
+                  <Text style={styles.caixaRevisaoTexto}>
+                    {resultado.motivoRevisao ??
+                      "O resultado deve ser conferido pelo operador."}
+                  </Text>
+                </View>
               </View>
             )}
 
             {/* Detalhes técnicos da segmentação e do classificador
                 ficam somente na API e não são exibidos ao operador. */}
-          </>
+          </View>
         ) : (
           <>
-            <Text style={styles.cardTitle}>
+            <Text style={styles.cardTitulo}>
               Aguardando análise
             </Text>
 
-            <Text style={styles.cardText}>
-              A IA classificará a vegetação como Normal,
-              Atenção ou Crítico.
+            <Text style={styles.cardTexto}>
+              A IA classificará a vegetação como Normal, Atenção ou Crítico.
             </Text>
 
-            <Text style={styles.rules}>
-              Normal: até 10 cm{"\n"}
-              Atenção: 10 a 30 cm{"\n"}
-              Crítico: acima de 30 cm
-            </Text>
+            <View style={styles.regras}>
+              {REGRAS.map((regra) => (
+                <View
+                  key={regra.classe}
+                  style={styles.regraLinha}
+                >
+                  <View
+                    style={[
+                      styles.regraPonto,
+                      { backgroundColor: cores.risco[regra.classe].cor },
+                    ]}
+                  />
+
+                  <Text style={styles.regraTexto}>
+                    {regra.nome}: {FAIXA_CLASSE[regra.classe]}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </>
         )}
-      </View>
+      </Card>
     </View>
   );
 }

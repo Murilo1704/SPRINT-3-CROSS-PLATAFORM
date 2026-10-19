@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import {
   router,
   useFocusEffect,
@@ -9,18 +11,15 @@ import {
 } from "react";
 
 import {
-  Alert,
+  KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   File,
@@ -29,26 +28,38 @@ import {
 
 import * as Sharing from "expo-sharing";
 
-import {
-  carregarOcorrencias,
-} from "../services/storage";
+import BadgeRisco from "../components/ui/BadgeRisco";
+import Botao from "../components/ui/Botao";
+import Cabecalho from "../components/ui/Cabecalho";
+import Campo from "../components/ui/Campo";
+import Card from "../components/ui/Card";
+import EstadoVazio from "../components/ui/EstadoVazio";
+
+import { useSessao } from "../hooks/useSessao";
+
+import { ehGestor } from "../services/auth";
+
+import { gerarCSV } from "../services/csv";
+
+import { carregarOcorrencias } from "../services/storage";
 
 import {
-  gerarCSV,
-} from "../services/csv";
+  cores,
+  espaco,
+  raio,
+  tipografia,
+} from "../theme";
 
-import {
-  Ocorrencia,
-} from "../types/Ocorrencia";
+import { Ocorrencia } from "../types/Ocorrencia";
+
+import { mostrarMensagem } from "../utils/mensagem";
 
 
 // ============================================================
 // PRIORIDADE DAS CLASSES
 // ============================================================
 
-function prioridadeClasse(
-  classe: Ocorrencia["classe"]
-) {
+function prioridadeClasse(classe: Ocorrencia["classe"]) {
   if (classe === "CRITICO") {
     return 3;
   }
@@ -61,27 +72,40 @@ function prioridadeClasse(
 }
 
 
-// ============================================================
-// FORMATAR DATA
-// ============================================================
+// CRÍTICO → ATENÇÃO → NORMAL; depois maior confiança; depois mais recente
+function ordenarOcorrencias(lista: Ocorrencia[]) {
+  return [...lista].sort((a, b) => {
+    const prioridadeA = prioridadeClasse(a.classe);
+    const prioridadeB = prioridadeClasse(b.classe);
 
-function formatarData(
-  dataIso: string
-) {
-  const data =
-    new Date(dataIso);
+    if (prioridadeA !== prioridadeB) {
+      return prioridadeB - prioridadeA;
+    }
 
-  if (
-    Number.isNaN(
-      data.getTime()
-    )
-  ) {
+    if (a.confianca !== b.confianca) {
+      return b.confianca - a.confianca;
+    }
+
+    return new Date(b.data).getTime() - new Date(a.data).getTime();
+  });
+}
+
+
+const NOME_STATUS: Record<Ocorrencia["status"], string> = {
+  PENDENTE: "Pendente",
+  EM_ANDAMENTO: "Em andamento",
+  CONCLUIDO: "Concluído",
+};
+
+
+function formatarData(dataIso: string) {
+  const data = new Date(dataIso);
+
+  if (Number.isNaN(data.getTime())) {
     return dataIso;
   }
 
-  return data.toLocaleDateString(
-    "pt-BR"
-  );
+  return data.toLocaleDateString("pt-BR");
 }
 
 
@@ -93,38 +117,20 @@ function converterData(
   texto: string,
   fimDoDia = false
 ) {
-  const partes =
-    texto
-      .trim()
-      .split("/");
+  const partes = texto.trim().split("/");
 
-  if (
-    partes.length !== 3
-  ) {
+  if (partes.length !== 3) {
     return null;
   }
 
-  const dia =
-    Number(partes[0]);
+  const dia = Number(partes[0]);
+  const mes = Number(partes[1]);
+  let ano = Number(partes[2]);
 
-  const mes =
-    Number(partes[1]);
-
-  let ano =
-    Number(partes[2]);
-
-
-  // Permite digitar:
-  // 01/07/26
-  // ou
-  // 01/07/2026
-
-  if (
-    partes[2].length === 2
-  ) {
+  // Permite digitar 01/07/26 ou 01/07/2026
+  if (partes[2].length === 2) {
     ano += 2000;
   }
-
 
   if (
     !Number.isInteger(dia) ||
@@ -134,22 +140,17 @@ function converterData(
     return null;
   }
 
+  const data = new Date(
+    ano,
+    mes - 1,
+    dia,
+    fimDoDia ? 23 : 0,
+    fimDoDia ? 59 : 0,
+    fimDoDia ? 59 : 0,
+    fimDoDia ? 999 : 0
+  );
 
-  const data =
-    new Date(
-      ano,
-      mes - 1,
-      dia,
-      fimDoDia ? 23 : 0,
-      fimDoDia ? 59 : 0,
-      fimDoDia ? 59 : 0,
-      fimDoDia ? 999 : 0
-    );
-
-
-  // Evita aceitar datas impossíveis,
-  // como 31/02/2026.
-
+  // Evita aceitar datas impossíveis, como 31/02/2026.
   if (
     data.getFullYear() !== ano ||
     data.getMonth() !== mes - 1 ||
@@ -157,7 +158,6 @@ function converterData(
   ) {
     return null;
   }
-
 
   return data;
 }
@@ -168,252 +168,93 @@ function converterData(
 // ============================================================
 
 function obterPeriodoPadrao() {
-  const hoje =
-    new Date();
+  const hoje = new Date();
 
-  const primeiroDia =
-    new Date(
-      hoje.getFullYear(),
-      hoje.getMonth(),
-      1
-    );
-
-  const ultimoDia =
-    new Date(
-      hoje.getFullYear(),
-      hoje.getMonth() + 1,
-      0
-    );
-
-
-  const formatar = (
-    data: Date
-  ) => {
-    const dia =
-      String(
-        data.getDate()
-      ).padStart(
-        2,
-        "0"
-      );
-
-    const mes =
-      String(
-        data.getMonth() + 1
-      ).padStart(
-        2,
-        "0"
-      );
-
-    const ano =
-      data.getFullYear();
-
-    return `${dia}/${mes}/${ano}`;
+  const formatar = (data: Date) => {
+    const dia = String(data.getDate()).padStart(2, "0");
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    return `${dia}/${mes}/${data.getFullYear()}`;
   };
 
-
   return {
-    inicio:
-      formatar(
-        primeiroDia
-      ),
-
-    fim:
-      formatar(
-        ultimoDia
-      ),
+    inicio: formatar(new Date(hoje.getFullYear(), hoje.getMonth(), 1)),
+    fim: formatar(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)),
   };
 }
 
 
+function filtrarPeriodo(
+  dados: Ocorrencia[],
+  inicio: Date,
+  fim: Date
+) {
+  return dados.filter((ocorrencia) => {
+    const timestamp = new Date(ocorrencia.data).getTime();
+
+    return (
+      timestamp >= inicio.getTime() &&
+      timestamp <= fim.getTime()
+    );
+  });
+}
+
+
 // ============================================================
-// TELA
+// TELA (somente gestor)
 // ============================================================
 
 export default function PrioridadesScreen() {
-  const periodoPadrao =
-    obterPeriodoPadrao();
+  const insets = useSafeAreaInsets();
 
+  const { usuario } = useSessao();
 
-  const [
-    todasOcorrencias,
-    setTodasOcorrencias,
-  ] =
-    useState<Ocorrencia[]>(
-      []
-    );
+  const periodoPadrao = obterPeriodoPadrao();
 
+  const [todasOcorrencias, setTodasOcorrencias] =
+    useState<Ocorrencia[]>([]);
 
-  const [
-    ocorrenciasFiltradas,
-    setOcorrenciasFiltradas,
-  ] =
-    useState<Ocorrencia[]>(
-      []
-    );
+  const [ocorrenciasFiltradas, setOcorrenciasFiltradas] =
+    useState<Ocorrencia[]>([]);
 
+  const [dataInicial, setDataInicial] =
+    useState(periodoPadrao.inicio);
 
-  const [
-    dataInicial,
-    setDataInicial,
-  ] =
-    useState(
-      periodoPadrao.inicio
-    );
+  const [dataFinal, setDataFinal] =
+    useState(periodoPadrao.fim);
 
+  const [erroPeriodo, setErroPeriodo] =
+    useState<string | null>(null);
 
-  const [
-    dataFinal,
-    setDataFinal,
-  ] =
-    useState(
-      periodoPadrao.fim
-    );
-
-
-  const [
-    exportando,
-    setExportando,
-  ] =
+  const [exportando, setExportando] =
     useState(false);
-
-
-  // =========================================================
-  // ORDENAR
-  // =========================================================
-
-  function ordenarOcorrencias(
-    lista: Ocorrencia[]
-  ) {
-    return [...lista].sort(
-      (a, b) => {
-        const prioridadeA =
-          prioridadeClasse(
-            a.classe
-          );
-
-        const prioridadeB =
-          prioridadeClasse(
-            b.classe
-          );
-
-
-        // Primeiro:
-        // CRÍTICO → ATENÇÃO → NORMAL
-
-        if (
-          prioridadeA !==
-          prioridadeB
-        ) {
-          return (
-            prioridadeB -
-            prioridadeA
-          );
-        }
-
-
-        // Mesma classe:
-        // maior confiança primeiro
-
-        if (
-          a.confianca !==
-          b.confianca
-        ) {
-          return (
-            b.confianca -
-            a.confianca
-          );
-        }
-
-
-        // Depois:
-        // mais recente primeiro
-
-        return (
-          new Date(
-            b.data
-          ).getTime() -
-          new Date(
-            a.data
-          ).getTime()
-        );
-      }
-    );
-  }
 
 
   // =========================================================
   // FILTRAR
   // =========================================================
 
-  function aplicarFiltro(
-    dados = todasOcorrencias
-  ) {
-    const inicio =
-      converterData(
-        dataInicial,
-        false
-      );
+  function aplicarFiltro(dados = todasOcorrencias) {
+    const inicio = converterData(dataInicial, false);
+    const fim = converterData(dataFinal, true);
 
-    const fim =
-      converterData(
-        dataFinal,
-        true
-      );
-
-
-    if (
-      !inicio ||
-      !fim
-    ) {
-      mostrarMensagem(
-        "Data inválida",
+    if (!inicio || !fim) {
+      setErroPeriodo(
         "Informe as datas no formato DD/MM/AAAA. Exemplo: 01/07/2026."
       );
-
       return;
     }
 
-
-    if (
-      inicio.getTime() >
-      fim.getTime()
-    ) {
-      mostrarMensagem(
-        "Período inválido",
+    if (inicio.getTime() > fim.getTime()) {
+      setErroPeriodo(
         "A data inicial não pode ser posterior à data final."
       );
-
       return;
     }
 
-
-    const filtradas =
-      dados.filter(
-        (ocorrencia) => {
-          const data =
-            new Date(
-              ocorrencia.data
-            );
-
-          const timestamp =
-            data.getTime();
-
-
-          return (
-            timestamp >=
-              inicio.getTime() &&
-            timestamp <=
-              fim.getTime()
-          );
-        }
-      );
-
+    setErroPeriodo(null);
 
     setOcorrenciasFiltradas(
-      ordenarOcorrencias(
-        filtradas
-      )
+      ordenarOcorrencias(filtrarPeriodo(dados, inicio, fim))
     );
   }
 
@@ -425,66 +266,19 @@ export default function PrioridadesScreen() {
   useFocusEffect(
     useCallback(() => {
       async function carregar() {
-        const dados =
-          await carregarOcorrencias();
+        const dados = await carregarOcorrencias();
 
-        setTodasOcorrencias(
-          dados
-        );
+        setTodasOcorrencias(dados);
 
-
-        const inicio =
-          converterData(
-            dataInicial,
-            false
-          );
-
-        const fim =
-          converterData(
-            dataFinal,
-            true
-          );
-
-
-        if (
-          !inicio ||
-          !fim
-        ) {
-          setOcorrenciasFiltradas(
-            ordenarOcorrencias(
-              dados
-            )
-          );
-
-          return;
-        }
-
-
-        const filtradas =
-          dados.filter(
-            (ocorrencia) => {
-              const data =
-                new Date(
-                  ocorrencia.data
-                );
-
-              return (
-                data.getTime() >=
-                  inicio.getTime() &&
-                data.getTime() <=
-                  fim.getTime()
-              );
-            }
-          );
-
+        const inicio = converterData(dataInicial, false);
+        const fim = converterData(dataFinal, true);
 
         setOcorrenciasFiltradas(
           ordenarOcorrencias(
-            filtradas
+            inicio && fim ? filtrarPeriodo(dados, inicio, fim) : dados
           )
         );
       }
-
 
       carregar();
     }, [])
@@ -492,718 +286,301 @@ export default function PrioridadesScreen() {
 
 
   // =========================================================
-  // MENSAGEM
-  // =========================================================
-
-  function mostrarMensagem(
-    titulo: string,
-    mensagem: string
-  ) {
-    if (
-      Platform.OS === "web"
-    ) {
-      alert(
-        `${titulo}\n\n${mensagem}`
-      );
-
-      return;
-    }
-
-
-    Alert.alert(
-      titulo,
-      mensagem
-    );
-  }
-
-
-  // =========================================================
-  // VOLTAR
-  // =========================================================
-
-  function voltarInicio() {
-    router.replace("/");
-  }
-
-
-  // =========================================================
   // EXPORTAR CSV
   // =========================================================
 
   async function exportarCSV() {
-    if (
-      ocorrenciasFiltradas.length ===
-      0
-    ) {
+    if (ocorrenciasFiltradas.length === 0) {
       mostrarMensagem(
         "Nenhum dado",
         "Não existem ocorrências no período selecionado para exportar."
       );
-
       return;
     }
 
-
     try {
-      setExportando(
-        true
-      );
+      setExportando(true);
 
+      // Usa exatamente os dados filtrados na tela.
+      // O BOM UTF-8 ajuda o Excel a reconhecer os acentos.
+      const csvFinal = `﻿${gerarCSV(ocorrenciasFiltradas)}`;
 
-      // Usa exatamente os dados
-      // filtrados na tela.
+      // ---------------- WEB ----------------
+      if (Platform.OS === "web") {
+        const blob = new Blob([csvFinal], {
+          type: "text/csv;charset=utf-8;",
+        });
 
-      const conteudoCSV =
-        gerarCSV(
-          ocorrenciasFiltradas
-        );
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
 
+        link.href = url;
+        link.download = `verdescan_${dataInicial.replace(/\//g, "-")}_a_${dataFinal.replace(/\//g, "-")}.csv`;
 
-      // BOM UTF-8 ajuda Excel
-      // a reconhecer acentos corretamente.
-
-      const csvFinal =
-        `\uFEFF${conteudoCSV}`;
-
-
-      // =====================================================
-      // WEB
-      // =====================================================
-
-      if (
-        Platform.OS === "web"
-      ) {
-        const blob =
-          new Blob(
-            [csvFinal],
-            {
-              type:
-                "text/csv;charset=utf-8;",
-            }
-          );
-
-
-        const url =
-          URL.createObjectURL(
-            blob
-          );
-
-
-        const link =
-          document.createElement(
-            "a"
-          );
-
-
-        link.href =
-          url;
-
-        link.download =
-          `verdescan_${dataInicial.replace(
-            /\//g,
-            "-"
-          )}_a_${dataFinal.replace(
-            /\//g,
-            "-"
-          )}.csv`;
-
-
-        document.body.appendChild(
-          link
-        );
-
-
+        document.body.appendChild(link);
         link.click();
-
-
-        document.body.removeChild(
-          link
-        );
-
-
-        URL.revokeObjectURL(
-          url
-        );
-
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
 
         mostrarMensagem(
           "CSV gerado",
           "O arquivo CSV do período selecionado foi gerado com sucesso."
         );
-
-
         return;
       }
 
-
-      // =====================================================
-      // IPHONE / ANDROID
-      // =====================================================
-
-      const nomeArquivo =
-        `verdescan_${Date.now()}.csv`;
-
-
-      const arquivo =
-        new File(
-          Paths.cache,
-          nomeArquivo
-        );
-
-
-      arquivo.create();
-
-
-      arquivo.write(
-        csvFinal
+      // ---------------- IPHONE / ANDROID ----------------
+      const arquivo = new File(
+        Paths.cache,
+        `verdescan_${Date.now()}.csv`
       );
 
+      arquivo.create();
+      arquivo.write(csvFinal);
 
-      const compartilhamentoDisponivel =
-        await Sharing
-          .isAvailableAsync();
-
-
-      if (
-        !compartilhamentoDisponivel
-      ) {
+      if (!(await Sharing.isAvailableAsync())) {
         mostrarMensagem(
           "Compartilhamento indisponível",
           "Não foi possível abrir as opções de compartilhamento neste dispositivo."
         );
-
         return;
       }
 
-
-      await Sharing.shareAsync(
-        arquivo.uri
-      );
-
+      await Sharing.shareAsync(arquivo.uri);
 
     } catch (erro) {
-      console.error(
-        "Erro ao exportar CSV:",
-        erro
-      );
-
+      console.error("Erro ao exportar CSV:", erro);
 
       mostrarMensagem(
         "Erro ao exportar",
         "Não foi possível gerar o arquivo CSV."
       );
 
-
     } finally {
-      setExportando(
-        false
-      );
+      setExportando(false);
     }
   }
 
 
-  // =========================================================
-  // CONTADORES
-  // =========================================================
-
-  const totalCriticos =
-    ocorrenciasFiltradas.filter(
-      (item) =>
-        item.classe ===
-        "CRITICO"
-    ).length;
+  // O _layout.tsx já redireciona o operador; isto é só uma garantia.
+  if (!ehGestor(usuario)) {
+    return null;
+  }
 
 
-  const totalAtencao =
-    ocorrenciasFiltradas.filter(
-      (item) =>
-        item.classe ===
-        "ATENCAO"
-    ).length;
+  const totalCriticos = ocorrenciasFiltradas.filter(
+    (item) => item.classe === "CRITICO"
+  ).length;
 
+  const totalAtencao = ocorrenciasFiltradas.filter(
+    (item) => item.classe === "ATENCAO"
+  ).length;
 
-  const totalNormal =
-    ocorrenciasFiltradas.filter(
-      (item) =>
-        item.classe ===
-        "NORMAL"
-    ).length;
+  const totalNormal = ocorrenciasFiltradas.filter(
+    (item) => item.classe === "NORMAL"
+  ).length;
 
-
-  // =========================================================
-  // INTERFACE
-  // =========================================================
 
   return (
-    <SafeAreaView
-      style={
-        styles.container
-      }
+    <KeyboardAvoidingView
+      style={styles.tela}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
-        contentContainerStyle={
-          styles.content
-        }
-        keyboardShouldPersistTaps=
-          "handled"
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + espaco.xxxl,
+        }}
+        keyboardShouldPersistTaps="handled"
       >
+        <Cabecalho
+          titulo="Pontos prioritários"
+          subtitulo="Consulte e exporte as ocorrências por período"
+          rotuloVoltar="Início"
+          onVoltar={() => router.replace("/")}
+        />
 
-        {/* ==================================================
-            HEADER
-        ================================================== */}
+        <View style={styles.corpo}>
 
-        <View
-          style={
-            styles.header
-          }
-        >
-          <Pressable
-            style={
-              styles.backButton
-            }
-            onPress={
-              voltarInicio
-            }
-          >
-            <Text
-              style={
-                styles.backButtonText
-              }
-            >
-              ← Início
-            </Text>
-          </Pressable>
-
+          {/* PERÍODO */}
 
           <Text
-            style={
-              styles.title
-            }
+            style={styles.tituloSecao}
+            accessibilityRole="header"
           >
-            Pontos prioritários
+            Período
           </Text>
 
+          <Card>
+            <View style={styles.linhaDatas}>
+              <Campo
+                rotulo="Data inicial"
+                icone="calendar-outline"
+                value={dataInicial}
+                onChangeText={setDataInicial}
+                placeholder="01/07/2026"
+                keyboardType="numbers-and-punctuation"
+                estiloContainer={styles.campoData}
+              />
+
+              <Campo
+                rotulo="Data final"
+                icone="calendar-outline"
+                value={dataFinal}
+                onChangeText={setDataFinal}
+                placeholder="31/07/2026"
+                keyboardType="numbers-and-punctuation"
+                estiloContainer={styles.campoData}
+              />
+            </View>
+
+            {erroPeriodo ? (
+              <View style={styles.erroPeriodo}>
+                <Ionicons
+                  name="alert-circle"
+                  size={18}
+                  color={cores.perigo}
+                />
+                <Text style={styles.erroPeriodoTexto}>
+                  {erroPeriodo}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.ajuda}>
+                Formato: DD/MM/AAAA
+              </Text>
+            )}
+
+            <Botao
+              titulo="Aplicar período"
+              icone="search-outline"
+              variante="secundario"
+              onPress={() => aplicarFiltro()}
+            />
+          </Card>
+
+
+          {/* RESUMO */}
 
           <Text
-            style={
-              styles.subtitle
-            }
+            style={styles.tituloSecao}
+            accessibilityRole="header"
           >
-            Consulte e exporte as
-            ocorrências por período
-          </Text>
-        </View>
-
-
-        {/* ==================================================
-            FILTRO DE PERÍODO
-        ================================================== */}
-
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Período
-        </Text>
-
-
-        <View
-          style={
-            styles.filterCard
-          }
-        >
-
-          <Text
-            style={
-              styles.inputLabel
-            }
-          >
-            Data inicial
+            Resumo do período
           </Text>
 
-
-          <TextInput
-            style={
-              styles.input
-            }
-            value={
-              dataInicial
-            }
-            onChangeText={
-              setDataInicial
-            }
-            placeholder=
-              "01/07/2026"
-            placeholderTextColor=
-              "#9AA39C"
-            keyboardType=
-              "numbers-and-punctuation"
-          />
-
-
-          <Text
-            style={[
-              styles.inputLabel,
-              styles.secondLabel,
-            ]}
-          >
-            Data final
-          </Text>
-
-
-          <TextInput
-            style={
-              styles.input
-            }
-            value={
-              dataFinal
-            }
-            onChangeText={
-              setDataFinal
-            }
-            placeholder=
-              "31/07/2026"
-            placeholderTextColor=
-              "#9AA39C"
-            keyboardType=
-              "numbers-and-punctuation"
-          />
-
-
-          <Text
-            style={
-              styles.dateHelp
-            }
-          >
-            Formato: DD/MM/AAAA
-          </Text>
-
-
-          <TouchableOpacity
-            style={
-              styles.filterButton
-            }
-            onPress={() =>
-              aplicarFiltro()
-            }
-          >
-            <Text
-              style={
-                styles.filterButtonText
-              }
-            >
-              Aplicar período
-            </Text>
-          </TouchableOpacity>
-
-        </View>
-
-
-        {/* ==================================================
-            RESUMO
-        ================================================== */}
-
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Resumo do período
-        </Text>
-
-
-        <View
-          style={
-            styles.summaryContainer
-          }
-        >
-
-          <View
-            style={
-              styles.summaryCard
-            }
-          >
-            <Text
-              style={[
-                styles.summaryNumber,
-                styles.redText,
-              ]}
-            >
-              {totalCriticos}
-            </Text>
-
-            <Text
-              style={
-                styles.summaryLabel
-              }
-            >
-              Críticos
-            </Text>
-          </View>
-
-
-          <View
-            style={
-              styles.summaryCard
-            }
-          >
-            <Text
-              style={[
-                styles.summaryNumber,
-                styles.yellowText,
-              ]}
-            >
-              {totalAtencao}
-            </Text>
-
-            <Text
-              style={
-                styles.summaryLabel
-              }
-            >
-              Atenção
-            </Text>
-          </View>
-
-
-          <View
-            style={
-              styles.summaryCard
-            }
-          >
-            <Text
-              style={[
-                styles.summaryNumber,
-                styles.greenText,
-              ]}
-            >
-              {totalNormal}
-            </Text>
-
-            <Text
-              style={
-                styles.summaryLabel
-              }
-            >
-              Normais
-            </Text>
-          </View>
-
-        </View>
-
-
-        {/* ==================================================
-            EXPORTAR
-        ================================================== */}
-
-        <TouchableOpacity
-          style={[
-            styles.exportButton,
-
-            ocorrenciasFiltradas.length ===
-              0 &&
-              styles.exportButtonDisabled,
-          ]}
-          disabled={
-            exportando ||
-            ocorrenciasFiltradas.length ===
-              0
-          }
-          onPress={
-            exportarCSV
-          }
-        >
-          <Text
-            style={
-              styles.exportButtonText
-            }
-          >
-            {exportando
-              ? "Gerando CSV..."
-              : "Exportar período em CSV"}
-          </Text>
-        </TouchableOpacity>
-
-
-        <Text
-          style={
-            styles.exportHelp
-          }
-        >
-          O arquivo inclui data,
-          rodovia, KM, latitude,
-          longitude, classificação,
-          confiança e status.
-        </Text>
-
-
-        {/* ==================================================
-            LISTA
-        ================================================== */}
-
-        <View
-          style={
-            styles.listTitleRow
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitleNoMargin
-            }
-          >
-            Ocorrências
-          </Text>
-
-          <Text
-            style={
-              styles.totalText
-            }
-          >
-            {
-              ocorrenciasFiltradas.length
-            }{" "}
-            registros
-          </Text>
-        </View>
-
-
-        {ocorrenciasFiltradas.length ===
-        0 ? (
-
-          <View
-            style={
-              styles.emptyCard
-            }
-          >
-            <Text
-              style={
-                styles.emptyTitle
-              }
-            >
-              Nenhuma ocorrência
-            </Text>
-
-
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              Não foram encontradas
-              análises no período
-              selecionado.
-            </Text>
-          </View>
-
-        ) : (
-
-          ocorrenciasFiltradas.map(
-            (ocorrencia) => (
-
-              <View
-                key={
-                  ocorrencia.id
-                }
-                style={
-                  styles.card
-                }
+          <View style={styles.linhaResumo}>
+            {[
+              { valor: totalCriticos, rotulo: "Críticos", classe: "CRITICO" as const },
+              { valor: totalAtencao, rotulo: "Atenção", classe: "ATENCAO" as const },
+              { valor: totalNormal, rotulo: "Normais", classe: "NORMAL" as const },
+            ].map((item) => (
+              <Card
+                key={item.classe}
+                corFaixa={cores.risco[item.classe].cor}
+                estilo={styles.cardResumo}
               >
-
-                <View
-                  style={
-                    styles.cardLeft
-                  }
-                >
-                  <Text
-                    style={
-                      styles.location
-                    }
-                  >
-                    {
-                      ocorrencia.rodovia
-                    }{" "}
-                    • KM{" "}
-                    {
-                      ocorrencia.km
-                    }
-                  </Text>
-
-
-                  <Text
-                    style={
-                      styles.date
-                    }
-                  >
-                    {formatarData(
-                      ocorrencia.data
-                    )}
-                  </Text>
-
-
-                  <Text
-                    style={
-                      styles.confidence
-                    }
-                  >
-                    {ocorrencia.origemClassificacao ===
-                    "MANUAL"
-                      ? "Classificação manual"
-                      : `Confiança: ${(
-                          ocorrencia.confianca *
-                          100
-                        ).toFixed(1)}%`}
-                  </Text>
-
-
-                  <Text
-                    style={
-                      styles.statusLabel
-                    }
-                  >
-                    Status:{" "}
-                    {
-                      ocorrencia.status
-                    }
-                  </Text>
-                </View>
-
-
-                <View
+                <Text
                   style={[
-                    styles.badge,
-
-                    ocorrencia.classe ===
-                    "CRITICO"
-                      ? styles.criticalBadge
-                      : ocorrencia.classe ===
-                        "ATENCAO"
-                        ? styles.attentionBadge
-                        : styles.normalBadge,
+                    styles.valorResumo,
+                    { color: cores.risco[item.classe].texto },
                   ]}
                 >
-                  <Text
-                    style={
-                      styles.badgeText
-                    }
-                  >
-                    {ocorrencia.classe ===
-                    "CRITICO"
-                      ? "CRÍTICO"
-                      : ocorrencia.classe ===
-                        "ATENCAO"
-                        ? "ATENÇÃO"
-                        : "NORMAL"}
-                  </Text>
+                  {item.valor}
+                </Text>
+
+                <Text style={styles.rotuloResumo}>
+                  {item.rotulo}
+                </Text>
+              </Card>
+            ))}
+          </View>
+
+
+          {/* EXPORTAR */}
+
+          <Botao
+            titulo={exportando ? "Gerando CSV..." : "Exportar período em CSV"}
+            icone="share-outline"
+            tamanho="grande"
+            carregando={exportando}
+            desabilitado={ocorrenciasFiltradas.length === 0}
+            onPress={exportarCSV}
+            estilo={styles.botaoExportar}
+          />
+
+          <Text style={styles.ajudaExportar}>
+            O arquivo inclui data, rodovia, KM, latitude, longitude,
+            classificação, confiança, status e quem registrou.
+          </Text>
+
+
+          {/* LISTA */}
+
+          <View style={styles.linhaTituloLista}>
+            <Text
+              style={[styles.tituloSecao, styles.semMargem]}
+              accessibilityRole="header"
+            >
+              Ocorrências
+            </Text>
+
+            <Text style={styles.totalRegistros}>
+              {ocorrenciasFiltradas.length} registros
+            </Text>
+          </View>
+
+          {ocorrenciasFiltradas.length === 0 ? (
+            <EstadoVazio
+              icone="calendar-outline"
+              titulo="Nenhuma ocorrência"
+              texto="Não foram encontradas análises no período selecionado."
+            />
+          ) : (
+            ocorrenciasFiltradas.map((ocorrencia, indice) => (
+              <Card
+                key={ocorrencia.id}
+                corFaixa={cores.risco[ocorrencia.classe].cor}
+                onPress={() =>
+                  router.push({
+                    pathname: "/trecho-detalhes",
+                    params: { id: ocorrencia.id },
+                  })
+                }
+                accessibilityLabel={`Prioridade ${indice + 1}: ${ocorrencia.rodovia}, KM ${ocorrencia.km}. Abrir detalhe.`}
+                estilo={styles.itemLista}
+              >
+                <View style={styles.itemTopo}>
+                  <View style={styles.posicao}>
+                    <Text style={styles.posicaoTexto}>
+                      {indice + 1}
+                    </Text>
+                  </View>
+
+                  <View style={styles.flex}>
+                    <Text style={styles.itemLocal}>
+                      {ocorrencia.rodovia} · KM {ocorrencia.km}
+                    </Text>
+
+                    <Text style={styles.itemData}>
+                      {formatarData(ocorrencia.data)} ·{" "}
+                      {NOME_STATUS[ocorrencia.status]}
+                    </Text>
+                  </View>
+
+                  <BadgeRisco classe={ocorrencia.classe} />
                 </View>
 
-              </View>
-            )
-          )
-        )}
-
+                <Text style={styles.itemConfianca}>
+                  {ocorrencia.origemClassificacao === "MANUAL"
+                    ? "Classificação manual"
+                    : `Confiança: ${(ocorrencia.confianca * 100).toFixed(1)}%`}
+                </Text>
+              </Card>
+            ))
+          )}
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -1212,486 +589,151 @@ export default function PrioridadesScreen() {
 // ESTILOS
 // ============================================================
 
-const styles =
-  StyleSheet.create({
-
-    container: {
-      flex: 1,
-
-      backgroundColor:
-        "#F4F7F4",
-    },
-
-
-    content: {
-      paddingBottom: 40,
-    },
-
-
-    header: {
-      backgroundColor:
-        "#164B2A",
-
-      paddingHorizontal: 20,
-
-      paddingTop: 20,
-
-      paddingBottom: 28,
-    },
-
-
-    backButton: {
-      alignSelf:
-        "flex-start",
-
-      marginBottom: 20,
-
-      paddingVertical: 8,
-
-      paddingHorizontal: 12,
-
-      backgroundColor:
-        "rgba(255,255,255,0.12)",
-
-      borderRadius: 10,
-    },
-
-
-    backButtonText: {
-      color:
-        "#FFFFFF",
-
-      fontSize: 15,
-
-      fontWeight:
-        "600",
-    },
-
-
-    title: {
-      color:
-        "#FFFFFF",
-
-      fontSize: 26,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    subtitle: {
-      color:
-        "#D8E7DC",
-
-      marginTop: 5,
-
-      fontSize: 14,
-    },
-
-
-    sectionTitle: {
-      fontSize: 19,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-
-      marginHorizontal: 20,
-
-      marginTop: 24,
-
-      marginBottom: 12,
-    },
-
-
-    filterCard: {
-      marginHorizontal: 20,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      borderRadius: 16,
-
-      padding: 18,
-    },
-
-
-    inputLabel: {
-      fontSize: 14,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-
-      marginBottom: 7,
-    },
-
-
-    secondLabel: {
-      marginTop: 16,
-    },
-
-
-    input: {
-      width:
-        "100%",
-
-      backgroundColor:
-        "#F4F7F4",
-
-      borderWidth: 1,
-
-      borderColor:
-        "#D8E0DA",
-
-      borderRadius: 10,
-
-      paddingHorizontal: 14,
-
-      paddingVertical: 13,
-
-      fontSize: 16,
-
-      color:
-        "#1D2A21",
-    },
-
-
-    dateHelp: {
-      marginTop: 10,
-
-      fontSize: 12,
-
-      color:
-        "#778078",
-    },
-
-
-    filterButton: {
-      marginTop: 18,
-
-      backgroundColor:
-        "#21894A",
-
-      borderRadius: 12,
-
-      paddingVertical: 14,
-
-      alignItems:
-        "center",
-    },
-
-
-    filterButtonText: {
-      color:
-        "#FFFFFF",
-
-      fontSize: 15,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    summaryContainer: {
-      flexDirection:
-        "row",
-
-      paddingHorizontal: 20,
-
-      gap: 10,
-    },
-
-
-    summaryCard: {
-      flex: 1,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      borderRadius: 12,
-
-      paddingVertical: 15,
-
-      alignItems:
-        "center",
-    },
-
-
-    summaryNumber: {
-      fontSize: 23,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    summaryLabel: {
-      marginTop: 3,
-
-      fontSize: 12,
-
-      color:
-        "#6B756E",
-    },
-
-
-    redText: {
-      color:
-        "#D63E3E",
-    },
-
-
-    yellowText: {
-      color:
-        "#E0A82E",
-    },
-
-
-    greenText: {
-      color:
-        "#2E9D50",
-    },
-
-
-    exportButton: {
-      marginHorizontal: 20,
-
-      marginTop: 24,
-
-      backgroundColor:
-        "#164B2A",
-
-      paddingVertical: 16,
-
-      borderRadius: 14,
-
-      alignItems:
-        "center",
-    },
-
-
-    exportButtonDisabled: {
-      opacity: 0.45,
-    },
-
-
-    exportButtonText: {
-      color:
-        "#FFFFFF",
-
-      fontSize: 16,
-
-      fontWeight:
-        "bold",
-    },
-
-
-    exportHelp: {
-      marginHorizontal: 28,
-
-      marginTop: 9,
-
-      fontSize: 12,
-
-      lineHeight: 17,
-
-      textAlign:
-        "center",
-
-      color:
-        "#778078",
-    },
-
-
-    listTitleRow: {
-      marginHorizontal: 20,
-
-      marginTop: 28,
-
-      marginBottom: 4,
-
-      flexDirection:
-        "row",
-
-      justifyContent:
-        "space-between",
-
-      alignItems:
-        "center",
-    },
-
-
-    sectionTitleNoMargin: {
-      fontSize: 19,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-    },
-
-
-    totalText: {
-      fontSize: 12,
-
-      color:
-        "#778078",
-    },
-
-
-    card: {
-      marginHorizontal: 20,
-
-      marginTop: 12,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      borderRadius: 14,
-
-      padding: 16,
-
-      flexDirection:
-        "row",
-
-      justifyContent:
-        "space-between",
-
-      alignItems:
-        "center",
-    },
-
-
-    cardLeft: {
-      flex: 1,
-
-      paddingRight: 10,
-    },
-
-
-    location: {
-      fontSize: 17,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-    },
-
-
-    date: {
-      marginTop: 5,
-
-      color:
-        "#6B756E",
-
-      fontSize: 13,
-    },
-
-
-    confidence: {
-      marginTop: 5,
-
-      color:
-        "#526157",
-
-      fontSize: 13,
-    },
-
-
-    statusLabel: {
-      marginTop: 4,
-
-      color:
-        "#778078",
-
-      fontSize: 12,
-    },
-
-
-    badge: {
-      paddingHorizontal: 10,
-
-      paddingVertical: 7,
-
-      borderRadius: 20,
-    },
-
-
-    criticalBadge: {
-      backgroundColor:
-        "#D63E3E",
-    },
-
-
-    attentionBadge: {
-      backgroundColor:
-        "#E0A82E",
-    },
-
-
-    normalBadge: {
-      backgroundColor:
-        "#2E9D50",
-    },
-
-
-    badgeText: {
-      color:
-        "#FFFFFF",
-
-      fontWeight:
-        "bold",
-
-      fontSize: 11,
-    },
-
-
-    emptyCard: {
-      marginHorizontal: 20,
-
-      marginTop: 18,
-
-      backgroundColor:
-        "#FFFFFF",
-
-      padding: 24,
-
-      borderRadius: 14,
-
-      alignItems:
-        "center",
-    },
-
-
-    emptyTitle: {
-      fontSize: 17,
-
-      fontWeight:
-        "bold",
-
-      color:
-        "#1D2A21",
-    },
-
-
-    emptyText: {
-      marginTop: 6,
-
-      textAlign:
-        "center",
-
-      color:
-        "#6B756E",
-    },
-
-  });
-
-  
+const styles = StyleSheet.create({
+  tela: {
+    flex: 1,
+    backgroundColor: cores.fundo,
+  },
+
+  corpo: {
+    paddingHorizontal: espaco.xl,
+  },
+
+  flex: {
+    flex: 1,
+  },
+
+  tituloSecao: {
+    ...tipografia.secao,
+    color: cores.texto,
+    marginTop: espaco.xxl,
+    marginBottom: espaco.md,
+  },
+
+  semMargem: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
+
+  linhaDatas: {
+    flexDirection: "row",
+    gap: espaco.md,
+  },
+
+  campoData: {
+    flex: 1,
+    marginBottom: espaco.sm,
+  },
+
+  ajuda: {
+    ...tipografia.pequeno,
+    color: cores.textoSuave,
+    marginBottom: espaco.md,
+  },
+
+  erroPeriodo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.xs + 2,
+    backgroundColor: cores.perigoFundo,
+    borderRadius: raio.sm,
+    padding: espaco.sm + 2,
+    marginBottom: espaco.md,
+  },
+
+  erroPeriodoTexto: {
+    ...tipografia.pequeno,
+    color: cores.perigo,
+    fontWeight: "600",
+    flex: 1,
+  },
+
+  linhaResumo: {
+    flexDirection: "row",
+    gap: espaco.sm + 2,
+  },
+
+  cardResumo: {
+    flex: 1,
+    paddingVertical: espaco.md,
+    paddingHorizontal: espaco.md,
+  },
+
+  valorResumo: {
+    ...tipografia.numero,
+  },
+
+  rotuloResumo: {
+    ...tipografia.rotulo,
+    color: cores.textoSecundario,
+  },
+
+  botaoExportar: {
+    marginTop: espaco.xl,
+  },
+
+  ajudaExportar: {
+    ...tipografia.pequeno,
+    color: cores.textoSuave,
+    textAlign: "center",
+    marginTop: espaco.sm,
+  },
+
+  linhaTituloLista: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: espaco.xxl,
+    marginBottom: espaco.md,
+  },
+
+  totalRegistros: {
+    ...tipografia.rotulo,
+    color: cores.textoSecundario,
+  },
+
+  itemLista: {
+    marginBottom: espaco.md,
+  },
+
+  itemTopo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: espaco.md,
+  },
+
+  posicao: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: cores.superficieSuave,
+    borderWidth: 1,
+    borderColor: cores.borda,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  posicaoTexto: {
+    ...tipografia.corpoForte,
+    color: cores.texto,
+  },
+
+  itemLocal: {
+    ...tipografia.corpoForte,
+    fontSize: 17,
+    color: cores.texto,
+  },
+
+  itemData: {
+    ...tipografia.pequeno,
+    color: cores.textoSecundario,
+    marginTop: 2,
+  },
+
+  itemConfianca: {
+    ...tipografia.pequeno,
+    color: cores.textoSecundario,
+    marginTop: espaco.sm,
+    marginLeft: 36 + espaco.md,
+  },
+});

@@ -48,6 +48,13 @@ export type Ocorrencia = {
   equipe?: string;
   veiculo?: string; // placa
 
+  // Quem registrou (preenchido com o usuário logado no cadastro)
+  criadoPor?: {
+    id: string;
+    nome: string;
+    perfil: string;
+  };
+
   // Status da poda
   status: StatusOcorrencia;
   dataConclusao?: string; // ISO 8601

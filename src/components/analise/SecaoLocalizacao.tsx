@@ -1,13 +1,20 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import {
   ActivityIndicator,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
 import { AnaliseState } from "../../hooks/useAnalise";
 
+import { cores } from "../../theme";
+
+import Campo from "../ui/Campo";
+import Card from "../ui/Card";
+
 import { styles } from "./styles";
+import TituloPasso from "./TituloPasso";
 
 
 type Props = {
@@ -32,94 +39,93 @@ export default function SecaoLocalizacao({ analise }: Props) {
   } = analise;
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        3. Localização
-      </Text>
+    <View style={styles.secao}>
+      <TituloPasso
+        numero={3}
+        titulo="Localização"
+        concluido={localizacao !== null}
+      />
 
-      <View style={[styles.card, styles.formCard]}>
-        <View style={styles.locationStatus}>
-          <Text style={styles.locationStatusTitle}>
-            📍 {localizacao
-              ? "Localização definida"
-              : "Localização será identificada automaticamente"}
-          </Text>
+      <Card>
+        <View style={styles.statusLocal}>
+          <Ionicons
+            name={localizacao ? "location" : "location-outline"}
+            size={24}
+            color={cores.primaria}
+          />
 
-          <Text style={styles.locationStatusText}>
-            {textoOrigemLocalizacao()}
-          </Text>
-
-          {qualidadeLocalizacao && (
-            <Text style={styles.qualityText}>
-              Qualidade: {qualidadeLocalizacao}
+          <View style={styles.colunaFlex}>
+            <Text style={styles.statusLocalTitulo}>
+              {localizacao
+                ? "Localização definida"
+                : "Localização será identificada automaticamente"}
             </Text>
-          )}
+
+            <Text style={styles.statusLocalTexto}>
+              {textoOrigemLocalizacao()}
+            </Text>
+
+            {qualidadeLocalizacao && (
+              <Text style={styles.statusLocalTexto}>
+                Qualidade: {qualidadeLocalizacao}
+              </Text>
+            )}
+          </View>
         </View>
 
         {localizacao && (
-          <View style={styles.coordinatesBox}>
-            <Text style={styles.coordinateText}>
+          <View style={styles.coordenadas}>
+            <Text style={styles.coordenadaTexto}>
               Latitude: {localizacao.latitude.toFixed(6)}
             </Text>
 
-            <Text style={styles.coordinateText}>
+            <Text style={styles.coordenadaTexto}>
               Longitude: {localizacao.longitude.toFixed(6)}
             </Text>
           </View>
         )}
 
-        <View style={styles.optionalBox}>
-          <Text style={styles.optionalTitle}>
-            Coordenadas exatas (opcional)
-          </Text>
+        <Text style={styles.ajudaOpcional}>
+          Coordenadas exatas (opcional): se você souber a latitude e a
+          longitude, informe abaixo. Caso contrário, deixe vazio e o
+          VerdeScan usará a rodovia e o KM.
+        </Text>
 
-          <Text style={styles.optionalHelp}>
-            Se você souber a latitude e longitude exatas,
-            pode informá-las para melhorar a precisão.
-            Caso contrário, deixe os campos vazios e o
-            VerdeScan usará a rodovia e o KM.
-          </Text>
-
-          <Text style={styles.inputLabel}>
-            Latitude
-          </Text>
-
-          <TextInput
-            style={styles.input}
+        <View style={styles.linha}>
+          <Campo
+            rotulo="Latitude"
+            icone="navigate-outline"
             value={latitudeManual}
             onChangeText={alterarLatitudeManual}
-            placeholder="-22.8866235"
-            placeholderTextColor="#9AA39C"
+            placeholder="-22.8866"
             keyboardType="numbers-and-punctuation"
+            estiloContainer={styles.colunaFlex}
           />
 
-          <Text style={[styles.inputLabel, styles.secondInputLabel]}>
-            Longitude
-          </Text>
-
-          <TextInput
-            style={styles.input}
+          <Campo
+            rotulo="Longitude"
+            icone="navigate-outline"
             value={longitudeManual}
             onChangeText={alterarLongitudeManual}
-            placeholder="-47.1231735"
-            placeholderTextColor="#9AA39C"
+            placeholder="-47.1232"
             keyboardType="numbers-and-punctuation"
+            estiloContainer={styles.colunaFlex}
           />
         </View>
 
         {buscandoLocalizacao && (
-          <View style={styles.loadingLocation}>
+          <View style={styles.buscandoLocal}>
             <ActivityIndicator
               size="small"
-              color="#21894A"
+              color={cores.primaria}
             />
 
-            <Text style={styles.loadingLocationText}>
+            <Text style={styles.textoPequeno}>
               Localizando trecho...
             </Text>
           </View>
         )}
-      </View>
+      </Card>
     </View>
   );
 }

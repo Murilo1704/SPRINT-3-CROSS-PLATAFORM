@@ -1,10 +1,15 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import {
-  ActivityIndicator,
   Text,
-  TouchableOpacity,
+  View,
 } from "react-native";
 
 import { AnaliseState } from "../../hooks/useAnalise";
+
+import { cores } from "../../theme";
+
+import Botao from "../ui/Botao";
 
 import { styles } from "./styles";
 
@@ -31,58 +36,60 @@ export default function BotoesAcao({ analise }: Props) {
   } = analise;
 
   return (
-    <>
+    <View style={styles.acoes}>
+
       {/* ANALISAR */}
 
       {!resultado && (
-        <TouchableOpacity
-          style={[
-            styles.analyzeButton,
-            !podeAnalisar && styles.disabledButton,
-          ]}
-          disabled={!podeAnalisar}
-          onPress={analisarOcorrencia}
-        >
-          {analisando ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.analyzeButtonText}>
-              Analisar ocorrência
-            </Text>
+        <>
+          <Botao
+            titulo="Analisar ocorrência"
+            icone="scan-outline"
+            tamanho="grande"
+            carregando={analisando}
+            desabilitado={!podeAnalisar}
+            onPress={analisarOcorrencia}
+          />
+
+          {!podeAnalisar && !analisando && (
+            <View style={styles.dicaAnalise}>
+              <Ionicons
+                name="information-circle-outline"
+                size={18}
+                color={cores.textoSecundario}
+              />
+
+              <Text style={[styles.textoPequeno, styles.colunaFlex]}>
+                Para usar a IA: foto + rodovia + KM. Sem foto, use a
+                classificação manual.
+              </Text>
+            </View>
           )}
-        </TouchableOpacity>
+        </>
       )}
 
       {/* SALVAR (classificação da IA ou manual) */}
 
       {podeSalvar && (
-        <TouchableOpacity
-          style={styles.saveButton}
-          disabled={salvando}
+        <Botao
+          titulo="Salvar ocorrência"
+          icone="save-outline"
+          tamanho="grande"
+          carregando={salvando}
           onPress={salvarOcorrencia}
-        >
-          {salvando ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.saveButtonText}>
-              Salvar ocorrência
-            </Text>
-          )}
-        </TouchableOpacity>
+        />
       )}
 
       {/* REFAZER */}
 
       {resultado?.classe === "INCONCLUSIVO" && (
-        <TouchableOpacity
-          style={styles.secondaryBottomButton}
+        <Botao
+          titulo="Tentar outra análise"
+          icone="refresh"
+          variante="secundario"
           onPress={() => setResultado(null)}
-        >
-          <Text style={styles.secondaryBottomButtonText}>
-            Tentar outra análise
-          </Text>
-        </TouchableOpacity>
+        />
       )}
-    </>
+    </View>
   );
 }

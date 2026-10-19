@@ -1,4 +1,8 @@
 import {
+  File as ArquivoLocal,
+} from "expo-file-system";
+
+import {
   Platform,
 } from "react-native";
 
@@ -203,12 +207,19 @@ export async function enviarFotoParaAPI(
     );
 
   } else {
+    // Desde o SDK 57 o fetch do Expo não aceita mais o objeto
+    // { uri, name, type } do React Native ("Unsupported FormDataPart
+    // implementation"). Ele aceita qualquer objeto com bytes(), e
+    // usa name/type no cabeçalho do arquivo (a API exige image/*).
+    const arquivo =
+      new ArquivoLocal(uri);
+
     formData.append(
       "imagem",
       {
-        uri,
         name: nomeArquivo,
         type: mimeType,
+        bytes: () => arquivo.bytes(),
       } as any
     );
   }

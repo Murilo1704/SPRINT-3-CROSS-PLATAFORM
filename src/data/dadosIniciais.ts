@@ -15,6 +15,14 @@ import { Ocorrencia } from "../types/Ocorrencia";
 // As datas são relativas ao dia em que os dados são gravados.
 // ============================================================
 
+// Os exemplos ficam registrados pelo operador padrão do app.
+const OPERADOR_PADRAO: Ocorrencia["criadoPor"] = {
+  id: "operador",
+  nome: "Operador de Campo",
+  perfil: "OPERADOR",
+};
+
+
 function diasAtras(
   dias: number,
   hora = 9
@@ -30,6 +38,14 @@ function diasAtras(
 
 
 export function gerarDadosIniciais(): Ocorrencia[] {
+  return exemplos().map((ocorrencia) => ({
+    ...ocorrencia,
+    criadoPor: OPERADOR_PADRAO,
+  }));
+}
+
+
+function exemplos(): Ocorrencia[] {
   return [
     {
       id: "exemplo-1",

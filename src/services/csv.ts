@@ -133,6 +133,7 @@ export function gerarCSV(
     "Equipe",
     "Veículo",
     "Descrição",
+    "Registrado por",
   ];
 
 
@@ -201,6 +202,8 @@ export function gerarCSV(
           ocorrencia.veiculo,
 
           ocorrencia.descricao,
+
+          ocorrencia.criadoPor?.nome,
         ]
           .map(
             campoCSV

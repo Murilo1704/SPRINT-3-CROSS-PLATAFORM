@@ -12,10 +12,10 @@
 // e reinicie o Expo (npx expo start). Veja .env.example.
 // ============================================================
 
-// >>> TROQUE AQUI pela URL pública gerada no Railway <<<
-// (Railway > serviço > Settings > Networking > Generate Domain)
+// URL pública da API no Railway
+// (Railway > serviço > Settings > Networking).
 export const URL_API_RAILWAY =
-  "https://COLE-A-URL-DO-RAILWAY.up.railway.app";
+  "https://sprint-3-cross-plataform-production.up.railway.app";
 
 const URL_PADRAO = URL_API_RAILWAY;
 

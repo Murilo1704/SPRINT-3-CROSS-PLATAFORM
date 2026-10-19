@@ -1,3 +1,5 @@
+import { cores } from "../theme";
+
 import {
   ClasseRisco,
   NivelRisco,
@@ -78,10 +80,12 @@ export const NOME_ZONA: Record<TipoZona, string> = {
   NOBRE: "Área nobre",
 };
 
+// As cores ficam em src/theme (cores.risco), junto com o texto
+// de contraste e o fundo claro de cada classe.
 export const COR_CLASSE: Record<ClasseRisco, string> = {
-  NORMAL: "#2E9D50",
-  ATENCAO: "#E0A82E",
-  CRITICO: "#D63E3E",
+  NORMAL: cores.risco.NORMAL.cor,
+  ATENCAO: cores.risco.ATENCAO.cor,
+  CRITICO: cores.risco.CRITICO.cor,
 };
 
 

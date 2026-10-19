@@ -1,18 +1,65 @@
+import { Ionicons } from "@expo/vector-icons";
+
 import {
   Image,
+  Pressable,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 
 import { AnaliseState } from "../../hooks/useAnalise";
 
+import { cores } from "../../theme";
+
+import Botao, { NomeIcone } from "../ui/Botao";
+import Card from "../ui/Card";
+
 import { styles } from "./styles";
+import TituloPasso from "./TituloPasso";
 
 
 type Props = {
   analise: AnaliseState;
 };
+
+
+// Botão grande para usar com uma mão (câmera / galeria)
+function BotaoFoto({
+  icone,
+  titulo,
+  primario,
+  onPress,
+}: {
+  icone: NomeIcone;
+  titulo: string;
+  primario?: boolean;
+  onPress: () => void;
+}) {
+  const corTexto = primario ? cores.sobrePrimaria : cores.primariaEscura;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={titulo}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.botaoFoto,
+        primario ? styles.botaoFotoPrimario : styles.botaoFotoSecundario,
+        pressed && styles.pressionado,
+      ]}
+    >
+      <Ionicons
+        name={icone}
+        size={36}
+        color={corTexto}
+      />
+
+      <Text style={[styles.botaoFotoTexto, { color: corTexto }]}>
+        {titulo}
+      </Text>
+    </Pressable>
+  );
+}
 
 
 // ============================================================
@@ -28,81 +75,75 @@ export default function SecaoFoto({ analise }: Props) {
   } = analise;
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        1. Foto da vegetação
-      </Text>
+    <View style={styles.secao}>
+      <TituloPasso
+        numero={1}
+        titulo="Foto da vegetação"
+        concluido={fotoUri !== null}
+      />
 
-      <View style={styles.card}>
-        {fotoUri ? (
-          <>
-            <Image
-              source={{ uri: fotoUri }}
-              style={styles.previewImage}
+      {fotoUri ? (
+        <Card>
+          <Image
+            source={{ uri: fotoUri }}
+            style={styles.previewImagem}
+            accessibilityLabel="Prévia da foto registrada"
+          />
+
+          <View style={styles.fotoOk}>
+            <Ionicons
+              name="checkmark-circle"
+              size={22}
+              color={cores.sucesso}
             />
 
-            <Text style={styles.successText}>
-              ✓ Foto registrada
-            </Text>
+            <View>
+              <Text style={styles.fotoOkTexto}>
+                Foto registrada
+              </Text>
 
-            <Text style={styles.smallText}>
-              {origemFoto === "camera"
-                ? "Foto tirada agora"
-                : "Imagem selecionada da galeria"}
-            </Text>
+              <Text style={styles.textoPequeno}>
+                {origemFoto === "camera"
+                  ? "Foto tirada agora"
+                  : "Imagem selecionada da galeria"}
+              </Text>
+            </View>
+          </View>
 
-            <TouchableOpacity
-              style={styles.primaryButton}
+          <View style={styles.linha}>
+            <Botao
+              titulo="Tirar nova foto"
+              icone="camera-outline"
+              variante="contorno"
               onPress={tirarFoto}
-            >
-              <Text style={styles.primaryButtonText}>
-                Tirar nova foto
-              </Text>
-            </TouchableOpacity>
+              estilo={styles.colunaFlex}
+            />
 
-            <TouchableOpacity
-              style={styles.secondaryButton}
+            <Botao
+              titulo="Outra da galeria"
+              icone="images-outline"
+              variante="contorno"
               onPress={selecionarFoto}
-            >
-              <Text style={styles.secondaryButtonText}>
-                Escolher outra da galeria
-              </Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <Text style={styles.icon}>
-              📷
-            </Text>
+              estilo={styles.colunaFlex}
+            />
+          </View>
+        </Card>
+      ) : (
+        <View style={styles.botoesFoto}>
+          <BotaoFoto
+            icone="camera"
+            titulo="Tirar foto agora"
+            primario
+            onPress={tirarFoto}
+          />
 
-            <Text style={styles.cardTitle}>
-              Registre a vegetação
-            </Text>
-
-            <Text style={styles.cardText}>
-              Tire uma foto ou selecione uma imagem existente.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={tirarFoto}
-            >
-              <Text style={styles.primaryButtonText}>
-                Tirar foto agora
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={selecionarFoto}
-            >
-              <Text style={styles.secondaryButtonText}>
-                Escolher da galeria
-              </Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+          <BotaoFoto
+            icone="images-outline"
+            titulo="Escolher da galeria"
+            onPress={selecionarFoto}
+          />
+        </View>
+      )}
     </View>
   );
 }

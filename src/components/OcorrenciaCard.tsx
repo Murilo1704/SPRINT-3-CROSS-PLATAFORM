@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Image,
 } from "react-native";
+import { NOME_RISCO, riscoPorClasse } from "../constants/risco";
 import { Ocorrencia } from "../types/Ocorrencia";
 
 interface OcorrenciaCardProps {
@@ -97,6 +98,24 @@ function formatarDataHora(dataIso: string): {
 }
 
 /**
+ * Linha de risco: "Risco Alto · IA 91%" ou "Risco Médio · manual"
+ */
+function textoRisco(ocorrencia: Ocorrencia): string {
+  const risco =
+    NOME_RISCO[ocorrencia.risco ?? riscoPorClasse(ocorrencia.classe)];
+
+  const origem =
+    ocorrencia.origemClassificacao === "MANUAL"
+      ? "manual"
+      : `IA ${(ocorrencia.confianca * 100).toFixed(0)}%`;
+
+  const concluida =
+    ocorrencia.status === "CONCLUIDO" ? " · concluída" : "";
+
+  return `Risco ${risco} · ${origem}${concluida}`;
+}
+
+/**
  * Componente principal
  */
 export default function OcorrenciaCard({
@@ -153,6 +172,7 @@ export default function OcorrenciaCard({
         {/* KM */}
         <Text style={styles.km}>
           KM {ocorrencia.km.toFixed(1)}
+          {ocorrencia.local ? ` · ${ocorrencia.local}` : ""}
         </Text>
 
         {/* Descrição (se existir) */}
@@ -165,10 +185,10 @@ export default function OcorrenciaCard({
           </Text>
         )}
 
-        {/* Rodapé: Confiança + Hora */}
+        {/* Rodapé: Risco + Hora */}
         <View style={styles.rodape}>
           <Text style={styles.confianca}>
-            Confiança: {(ocorrencia.confianca * 100).toFixed(0)}%
+            {textoRisco(ocorrencia)}
           </Text>
 
           {hora && (

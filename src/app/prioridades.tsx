@@ -12,7 +12,6 @@ import {
   Alert,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +19,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   File,
@@ -1145,14 +1146,13 @@ export default function PrioridadesScreen() {
                       styles.confidence
                     }
                   >
-                    Confiança:{" "}
-                    {(
-                      ocorrencia.confianca *
-                      100
-                    ).toFixed(
-                      1
-                    )}
-                    %
+                    {ocorrencia.origemClassificacao ===
+                    "MANUAL"
+                      ? "Classificação manual"
+                      : `Confiança: ${(
+                          ocorrencia.confianca *
+                          100
+                        ).toFixed(1)}%`}
                   </Text>
 
 

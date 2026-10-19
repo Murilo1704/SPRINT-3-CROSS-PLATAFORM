@@ -1,6 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
+  gerarDadosIniciais,
+} from "../data/dadosIniciais";
+
+import {
   Ocorrencia,
 } from "../types/Ocorrencia";
 
@@ -13,14 +17,12 @@ const STORAGE_KEY =
   "@verdescan_ocorrencias";
 
 
-// Esta chave serve SOMENTE para limpar os dados antigos
-// uma única vez antes da gravação do protótipo.
-//
-// Depois que executar uma vez, ela fica marcada como concluída
-// e os novos registros NÃO serão apagados novamente.
+// Marca que os dados de exemplo já foram gravados uma vez.
+// Se o usuário apagar tudo depois, a lista fica vazia
+// (os exemplos NÃO são recriados).
 
-const RESET_VIDEO_KEY =
-  "@verdescan_reset_video_2026_08_17_v1";
+const DADOS_INICIAIS_KEY =
+  "@verdescan_dados_iniciais_v1";
 
 
 // ============================================================
@@ -31,47 +33,61 @@ const MESES_RETENCAO = 6;
 
 
 // ============================================================
-// RESET ÚNICO PARA A GRAVAÇÃO
+// DADOS DE EXEMPLO NA PRIMEIRA ABERTURA
 // ============================================================
 
-async function executarResetInicialSeNecessario() {
+async function gravarDadosIniciaisSeNecessario() {
   try {
-    const resetJaExecutado =
+    const jaGravados =
       await AsyncStorage.getItem(
-        RESET_VIDEO_KEY
+        DADOS_INICIAIS_KEY
       );
 
 
-    if (
-      resetJaExecutado ===
-      "CONCLUIDO"
-    ) {
+    if (jaGravados) {
       return;
     }
 
 
-    // Apaga somente as ocorrências.
-    // Login e outras configurações permanecem.
+    const dados =
+      await AsyncStorage.getItem(
+        STORAGE_KEY
+      );
+
+
+    let existentes: unknown = [];
+
+    try {
+      existentes =
+        dados ? JSON.parse(dados) : [];
+    } catch {
+      existentes = [];
+    }
+
+
+    // Só grava os exemplos se ainda não houver nada válido salvo.
+
+    if (
+      normalizarLista(existentes)
+        .length === 0
+    ) {
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(
+          gerarDadosIniciais()
+        )
+      );
+    }
+
 
     await AsyncStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify([])
-    );
-
-
-    await AsyncStorage.setItem(
-      RESET_VIDEO_KEY,
+      DADOS_INICIAIS_KEY,
       "CONCLUIDO"
-    );
-
-
-    console.log(
-      "✅ VerdeScan: registros antigos apagados para a gravação."
     );
 
   } catch (error) {
     console.error(
-      "Erro ao executar reset inicial:",
+      "Erro ao gravar dados iniciais:",
       error
     );
   }
@@ -121,6 +137,130 @@ function ocorrenciaAindaValida(
 
 
 // ============================================================
+// VALIDAR REGISTROS CARREGADOS
+//
+// Protege as telas contra dados antigos ou corrompidos
+// (ex.: registros de versões anteriores sem "rodovia").
+// Registros sem id, rodovia ou classe válida são descartados;
+// números inválidos viram 0 e status inválido vira PENDENTE.
+// ============================================================
+
+const CLASSES_VALIDAS = [
+  "NORMAL",
+  "ATENCAO",
+  "CRITICO",
+];
+
+const STATUS_VALIDOS = [
+  "PENDENTE",
+  "EM_ANDAMENTO",
+  "CONCLUIDO",
+];
+
+
+function numeroOuZero(
+  valor: unknown
+) {
+  const numero =
+    Number(valor);
+
+  return Number.isFinite(numero)
+    ? numero
+    : 0;
+}
+
+
+function normalizarOcorrencia(
+  item: any
+): Ocorrencia | null {
+
+  if (
+    !item ||
+    typeof item !== "object"
+  ) {
+    return null;
+  }
+
+
+  const rodovia =
+    typeof item.rodovia === "string"
+      ? item.rodovia.trim()
+      : "";
+
+
+  if (
+    item.id === undefined ||
+    item.id === null ||
+    item.id === "" ||
+    !rodovia ||
+    !CLASSES_VALIDAS.includes(
+      item.classe
+    )
+  ) {
+    return null;
+  }
+
+
+  return {
+    ...item,
+
+    id:
+      String(item.id),
+
+    data:
+      typeof item.data === "string"
+        ? item.data
+        : new Date().toISOString(),
+
+    rodovia,
+
+    km:
+      numeroOuZero(item.km),
+
+    latitude:
+      numeroOuZero(item.latitude),
+
+    longitude:
+      numeroOuZero(item.longitude),
+
+    confianca:
+      numeroOuZero(item.confianca),
+
+    status:
+      STATUS_VALIDOS.includes(
+        item.status
+      )
+        ? item.status
+        : "PENDENTE",
+  };
+}
+
+
+function normalizarLista(
+  dados: unknown
+): Ocorrencia[] {
+
+  if (
+    !Array.isArray(dados)
+  ) {
+    return [];
+  }
+
+
+  return dados
+    .map(
+      normalizarOcorrencia
+    )
+    .filter(
+      (
+        ocorrencia
+      ): ocorrencia is Ocorrencia =>
+        ocorrencia !== null
+    );
+}
+
+
+// ============================================================
 // SALVAR LISTA COMPLETA
 // ============================================================
 
@@ -150,7 +290,7 @@ export async function salvarOcorrencias(
 // CARREGAR
 //
 // Também executa:
-// 1. reset inicial da gravação;
+// 1. gravação dos dados de exemplo na primeira abertura;
 // 2. limpeza de registros com mais de 6 meses.
 // ============================================================
 
@@ -159,10 +299,10 @@ export async function carregarOcorrencias():
 
   try {
     // --------------------------------------------------------
-    // RESET ÚNICO
+    // DADOS DE EXEMPLO (somente uma vez)
     // --------------------------------------------------------
 
-    await executarResetInicialSeNecessario();
+    await gravarDadosIniciaisSeNecessario();
 
 
     // --------------------------------------------------------
@@ -180,42 +320,32 @@ export async function carregarOcorrencias():
     }
 
 
-    const dadosConvertidos =
-      JSON.parse(
-        dados
-      );
-
-
-    if (
-      !Array.isArray(
-        dadosConvertidos
-      )
-    ) {
-      return [];
-    }
-
-
-    const ocorrencias =
-      dadosConvertidos as
-        Ocorrencia[];
-
-
     // --------------------------------------------------------
-    // APAGAR AUTOMATICAMENTE > 6 MESES
+    // VALIDAR + APAGAR AUTOMATICAMENTE > 6 MESES
     // --------------------------------------------------------
 
     const ocorrenciasValidas =
-      ocorrencias.filter(
+      normalizarLista(
+        JSON.parse(
+          dados
+        )
+      ).filter(
         ocorrenciaAindaValida
       );
 
 
-    // Se alguma ocorrência expirou,
+    // Se algum registro expirou ou foi corrigido/descartado,
     // atualiza o AsyncStorage automaticamente.
 
+    const dadosValidos =
+      JSON.stringify(
+        ocorrenciasValidas
+      );
+
+
     if (
-      ocorrenciasValidas.length !==
-      ocorrencias.length
+      dadosValidos !==
+      dados
     ) {
       await salvarOcorrencias(
         ocorrenciasValidas
@@ -223,10 +353,7 @@ export async function carregarOcorrencias():
 
 
       console.log(
-        `${
-          ocorrencias.length -
-          ocorrenciasValidas.length
-        } ocorrência(s) antiga(s) removida(s) automaticamente.`
+        "Ocorrências antigas ou inválidas foram ajustadas automaticamente."
       );
     }
 
@@ -353,4 +480,31 @@ export async function limparTodasOcorrencias() {
 
     throw error;
   }
+}
+
+
+// ============================================================
+// RESTAURAR DADOS DE EXEMPLO
+//
+// Substitui a lista atual pelas ocorrências de exemplo,
+// com datas recalculadas a partir de hoje.
+// ============================================================
+
+export async function restaurarDadosIniciais() {
+  const dados =
+    gerarDadosIniciais();
+
+
+  await salvarOcorrencias(
+    dados
+  );
+
+
+  await AsyncStorage.setItem(
+    DADOS_INICIAIS_KEY,
+    "CONCLUIDO"
+  );
+
+
+  return dados;
 }

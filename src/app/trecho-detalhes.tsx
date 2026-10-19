@@ -14,14 +14,23 @@ import {
   Image,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import {
+  NOME_RISCO,
+  NOME_ZONA,
+  riscoPorClasse,
+  violaContrato,
+} from "../constants/risco";
+
+import {
+  atualizarOcorrencia,
   carregarOcorrencias,
   removerOcorrencia,
 } from "../services/storage";
@@ -131,6 +140,168 @@ function nomeStatus(
 
 
   return "PENDENTE";
+}
+
+
+// ============================================================
+// MENSAGEM
+// ============================================================
+
+function mostrarMensagem(
+  titulo: string,
+  mensagem: string
+) {
+  if (
+    Platform.OS ===
+    "web"
+  ) {
+    alert(
+      `${titulo}\n\n${mensagem}`
+    );
+
+    return;
+  }
+
+
+  Alert.alert(
+    titulo,
+    mensagem
+  );
+}
+
+
+// ============================================================
+// DETALHES DO REGISTRO
+// Mostra só as linhas preenchidas.
+// ============================================================
+
+function DetalhesRegistro({
+  ocorrencia,
+}: {
+  ocorrencia: Ocorrencia;
+}) {
+
+  const linhas: [string, string | undefined][] = [
+    [
+      "Risco",
+      NOME_RISCO[
+        ocorrencia.risco ??
+        riscoPorClasse(
+          ocorrencia.classe
+        )
+      ],
+    ],
+
+    [
+      "Local",
+      ocorrencia.local,
+    ],
+
+    [
+      "Descrição",
+      ocorrencia.descricao,
+    ],
+
+    [
+      "Zona",
+      ocorrencia.zona
+        ? NOME_ZONA[
+            ocorrencia.zona
+          ]
+        : undefined,
+    ],
+
+    [
+      "Equipe",
+      ocorrencia.equipe,
+    ],
+
+    [
+      "Veículo",
+      ocorrencia.veiculo,
+    ],
+
+    [
+      "Poda concluída em",
+      ocorrencia.dataConclusao
+        ? formatarDataHora(
+            ocorrencia.dataConclusao
+          )
+        : undefined,
+    ],
+  ];
+
+
+  const foraDoContrato =
+    violaContrato(
+      ocorrencia.classe,
+      ocorrencia.zona
+    ) &&
+    ocorrencia.status !==
+      "CONCLUIDO";
+
+
+  return (
+    <>
+      <View
+        style={
+          styles.detailsBox
+        }
+      >
+        {linhas
+          .filter(
+            ([, valor]) =>
+              !!valor
+          )
+          .map(
+            ([rotulo, valor]) => (
+              <View
+                key={
+                  rotulo
+                }
+                style={
+                  styles.detailRow
+                }
+              >
+                <Text
+                  style={
+                    styles.detailLabel
+                  }
+                >
+                  {rotulo}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.detailValue,
+                    styles.detailValueLong,
+                  ]}
+                >
+                  {valor}
+                </Text>
+              </View>
+            )
+          )}
+      </View>
+
+
+      {foraDoContrato && (
+        <View
+          style={
+            styles.contractAlert
+          }
+        >
+          <Text
+            style={
+              styles.contractAlertText
+            }
+          >
+            Fora do limite do contrato: priorizar a poda.
+          </Text>
+        </View>
+      )}
+    </>
+  );
 }
 
 
@@ -266,21 +437,70 @@ export default function TrechoDetalhesScreen() {
       );
 
 
-      if (
-        Platform.OS ===
-        "web"
-      ) {
-        alert(
-          "Não foi possível excluir a ocorrência."
-        );
-
-        return;
-      }
-
-
-      Alert.alert(
+      mostrarMensagem(
         "Erro",
         "Não foi possível excluir a ocorrência."
+      );
+    }
+  }
+
+
+  // ==========================================================
+  // MARCAR PODA COMO CONCLUÍDA
+  // ==========================================================
+
+  async function concluirPoda(
+    ocorrencia:
+      Ocorrencia
+  ) {
+    try {
+
+      const atualizada: Ocorrencia = {
+        ...ocorrencia,
+
+        status:
+          "CONCLUIDO",
+
+        dataConclusao:
+          new Date()
+            .toISOString(),
+      };
+
+
+      await atualizarOcorrencia(
+        atualizada
+      );
+
+
+      setOcorrencias(
+        (dadosAtuais) =>
+          dadosAtuais.map(
+            (item) =>
+              item.id ===
+              atualizada.id
+                ? atualizada
+                : item
+          )
+      );
+
+
+      mostrarMensagem(
+        "Poda concluída",
+        `A poda da ${ocorrencia.rodovia} no KM ${ocorrencia.km} foi registrada como concluída.`
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        "Erro ao concluir poda:",
+        error
+      );
+
+
+      mostrarMensagem(
+        "Erro",
+        "Não foi possível atualizar a ocorrência."
       );
     }
   }
@@ -296,7 +516,7 @@ export default function TrechoDetalhesScreen() {
   ) {
 
     const mensagem =
-      `Deseja excluir a ocorrência da ${rodovia} no KM ${ocorrencia.km}?`;
+      `Deseja excluir a ocorrência da ${ocorrencia.rodovia} no KM ${ocorrencia.km}?`;
 
 
     if (
@@ -365,6 +585,13 @@ export default function TrechoDetalhesScreen() {
     ).length;
 
 
+  // Ao abrir pela lista (por id), o parâmetro "rodovia" não vem.
+  const titulo =
+    rodovia ||
+    ocorrencias[0]?.rodovia ||
+    "Ocorrência";
+
+
   // ==========================================================
   // INTERFACE
   // ==========================================================
@@ -415,7 +642,7 @@ export default function TrechoDetalhesScreen() {
               styles.title
             }
           >
-            {rodovia}
+            {titulo}
           </Text>
 
 
@@ -424,7 +651,9 @@ export default function TrechoDetalhesScreen() {
               styles.subtitle
             }
           >
-            Histórico de análises da rodovia
+            {ocorrenciaId
+              ? "Detalhe da ocorrência"
+              : "Histórico de análises da rodovia"}
           </Text>
 
         </View>
@@ -644,7 +873,7 @@ export default function TrechoDetalhesScreen() {
                           styles.detailLabel
                         }
                       >
-                        Confiança IA
+                        Classificação
                       </Text>
 
 
@@ -653,16 +882,13 @@ export default function TrechoDetalhesScreen() {
                           styles.detailValue
                         }
                       >
-                        {
-                          (
-                            ocorrencia
-                              .confianca *
-                            100
-                          ).toFixed(
-                            2
-                          )
-                        }
-                        %
+                        {ocorrencia.origemClassificacao ===
+                        "MANUAL"
+                          ? "Manual (operador)"
+                          : `IA · ${(
+                              ocorrencia.confianca *
+                              100
+                            ).toFixed(2)}%`}
                       </Text>
 
                     </View>
@@ -759,6 +985,15 @@ export default function TrechoDetalhesScreen() {
                   </View>
 
 
+                  {/* DADOS DO REGISTRO */}
+
+                  <DetalhesRegistro
+                    ocorrencia={
+                      ocorrencia
+                    }
+                  />
+
+
                   {/* FOTO */}
 
                   {
@@ -775,6 +1010,31 @@ export default function TrechoDetalhesScreen() {
                       />
                     )
                   }
+
+
+                  {/* CONCLUIR PODA */}
+
+                  {ocorrencia.status !==
+                    "CONCLUIDO" && (
+                    <Pressable
+                      style={
+                        styles.concludeButton
+                      }
+                      onPress={() =>
+                        concluirPoda(
+                          ocorrencia
+                        )
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.concludeButtonText
+                        }
+                      >
+                        Marcar poda como concluída
+                      </Text>
+                    </Pressable>
+                  )}
 
 
                   {/* EXCLUIR */}
@@ -1127,6 +1387,81 @@ const styles =
 
       fontSize:
         12,
+
+      fontWeight:
+        "bold",
+    },
+
+
+    detailValueLong: {
+      flexShrink:
+        1,
+
+      marginLeft:
+        12,
+
+      textAlign:
+        "right",
+    },
+
+
+    contractAlert: {
+      marginTop:
+        12,
+
+      backgroundColor:
+        "#FDEAEA",
+
+      borderWidth:
+        1,
+
+      borderColor:
+        "#D63E3E",
+
+      borderRadius:
+        10,
+
+      padding:
+        12,
+    },
+
+
+    contractAlertText: {
+      color:
+        "#B42F2F",
+
+      fontSize:
+        13,
+
+      fontWeight:
+        "bold",
+    },
+
+
+    concludeButton: {
+      marginTop:
+        16,
+
+      backgroundColor:
+        "#21894A",
+
+      borderRadius:
+        10,
+
+      paddingVertical:
+        12,
+
+      alignItems:
+        "center",
+    },
+
+
+    concludeButtonText: {
+      color:
+        "#FFFFFF",
+
+      fontSize:
+        14,
 
       fontWeight:
         "bold",

@@ -1,3 +1,9 @@
+import {
+  NOME_RISCO,
+  NOME_ZONA,
+  riscoPorClasse,
+} from "../constants/risco";
+
 import { Ocorrencia } from "../types/Ocorrencia";
 
 
@@ -120,6 +126,13 @@ export function gerarCSV(
     "Classificação",
     "Confiança",
     "Status",
+    "Risco",
+    "Origem",
+    "Local",
+    "Zona",
+    "Equipe",
+    "Veículo",
+    "Descrição",
   ];
 
 
@@ -127,11 +140,18 @@ export function gerarCSV(
     ocorrencias.map(
       (ocorrencia) => {
 
+        const manual =
+          ocorrencia.origemClassificacao ===
+          "MANUAL";
+
+
         const confianca =
-          `${(
-            ocorrencia.confianca *
-            100
-          ).toFixed(2)}%`;
+          manual
+            ? "manual"
+            : `${(
+                ocorrencia.confianca *
+                100
+              ).toFixed(2)}%`;
 
 
         return [
@@ -156,6 +176,31 @@ export function gerarCSV(
           formatarStatus(
             ocorrencia.status
           ),
+
+          NOME_RISCO[
+            ocorrencia.risco ??
+            riscoPorClasse(
+              ocorrencia.classe
+            )
+          ],
+
+          manual
+            ? "Manual"
+            : "IA",
+
+          ocorrencia.local,
+
+          ocorrencia.zona
+            ? NOME_ZONA[
+                ocorrencia.zona
+              ]
+            : "",
+
+          ocorrencia.equipe,
+
+          ocorrencia.veiculo,
+
+          ocorrencia.descricao,
         ]
           .map(
             campoCSV

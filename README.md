@@ -7,7 +7,6 @@
 | 🎬 **Vídeo de demonstração** (YouTube, não listado) | https://youtu.be/yacMScBubj8 |
 | 📦 **Repositório** | https://github.com/Murilo1704/SPRINT-3-CROSS-PLATAFORM |
 | 🤖 **API de IA (pública)** | https://sprint-3-cross-plataform-production.up.railway.app ([status dos modelos](https://sprint-3-cross-plataform-production.up.railway.app/status-modelos)) |
-| 🚂 **Painel do Railway** (deploy da API) | https://railway.com/dashboard |
 | 🧪 **Testes manuais** | [docs/TESTES.md](docs/TESTES.md) |
 
 ---
@@ -392,7 +391,7 @@ SPRINT-3-CROSS-PLATAFORM/
 | Permissões por perfil | ✅ | Interface esconde e `_layout.tsx` bloqueia a rota `/prioridades` |
 | Home com perfil, resumo, atalhos e mapa | ✅ | No navegador o mapa mostra só um aviso (react-native-maps não roda na web) ⚠️ |
 | Cadastro com foto (câmera/galeria) | ✅ | Fotos HEIC do iPhone são convertidas para JPEG |
-| Classificação por IA | ✅ | Depende da API no ar; cada análise leva alguns segundos ⚠️ |
+| Classificação por IA | ✅ | Depende da API no ar (plano de teste do Railway); cada análise leva alguns segundos; menos precisa perto dos limites de 10 e 30 cm ⚠️ |
 | Classificação manual (sem IA) | ✅ | Foto opcional |
 | Localização (GPS da foto, GPS atual, coordenadas, rodovia+KM) | ✅ | Rodovia+KM depende da API; sem ela usa GPS ou coordenadas |
 | Detalhes do registro (local, descrição, equipe, veículo) | ✅ | Equipe preenchida com a do usuário |
@@ -491,6 +490,8 @@ Observações:
 - Dados apenas no aparelho (AsyncStorage): não há sincronização entre operadores e gestor em celulares diferentes.
 - Mapa interativo só no celular/emulador.
 - A IA depende de conexão e cada análise leva alguns segundos.
+- A IA erra mais quando a vegetação está **perto de 10 cm ou de 30 cm** (limite entre as classes); nesses casos, vale conferir e, se preciso, usar a classificação manual.
+- A API está no **plano de teste do Railway**: quando os créditos acabarem ela sai do ar e o app passa a usar só a classificação manual.
 
 **Próximos passos (Trello da equipe)**
 1. Integrar o app ao **painel do gestor** (dados centralizados e login no servidor).

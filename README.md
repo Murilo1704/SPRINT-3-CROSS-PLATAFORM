@@ -4,9 +4,10 @@
 
 | | |
 |---|---|
-| 🎬 **Vídeo de demonstração** (YouTube, não listado) | https://youtu.be/COLE_O_LINK_AQUI |
+| 🎬 **Vídeo de demonstração** (YouTube, não listado) | https://youtu.be/yacMScBubj8 |
 | 📦 **Repositório** | https://github.com/Murilo1704/SPRINT-3-CROSS-PLATAFORM |
 | 🤖 **API de IA (pública)** | https://sprint-3-cross-plataform-production.up.railway.app ([status dos modelos](https://sprint-3-cross-plataform-production.up.railway.app/status-modelos)) |
+| 🚂 **Painel do Railway** (deploy da API) | https://railway.com/dashboard |
 | 🧪 **Testes manuais** | [docs/TESTES.md](docs/TESTES.md) |
 
 ---
